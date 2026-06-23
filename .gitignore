@@ -1,0 +1,27 @@
+# Python virtualenv
+Lib/
+Scripts/
+Include/
+share/
+etc/
+pyvenv.cfg
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Large source data files (not needed at runtime)
+data/GTFS.zip
+*.xlsx
+*.csv
+
+# Dev artefacts
+*.zip
+*.html
+*.ipynb
+cache/
+app_EN.py
+moabit-json-blob.ipynb
+moabit_transport.html
+files.zip
