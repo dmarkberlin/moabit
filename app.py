@@ -19,6 +19,7 @@ from layers.rent import fetch_wohnlagen, WOL_STYLE
 from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, LEGEND as ROUTE_LEGEND
+from layers.bikeshare import fetch_bikeshare_stations
 from layers.demographics import (
     population_over_time, migration_over_time, nationality_over_time,
     COUNTRY_COLOURS,
@@ -84,6 +85,10 @@ def get_routes():
 @st.cache_data(ttl=86400)
 def get_routes_full():
     return fetch_routes_full()
+
+@st.cache_data(ttl=300)
+def get_bikeshare_stations():
+    return fetch_bikeshare_stations()
 
 def _svg_uri(filename, scale=1.0, title=None):
     path = os.path.join("images", filename)
@@ -232,13 +237,16 @@ st.sidebar.title("Ebenen")
 show_routes = st.sidebar.checkbox("Verkehrslinien", value=True)
 show_routes_full = False
 if show_routes:
-    show_routes_full = st.sidebar.checkbox("Vollständige Linien (außerhalb Moabits)", value=False)
     legend_html = "".join(
         f'<span style="color:{colour}">&#9644;</span> {label}<br>'
         for label, colour in ROUTE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_transport = st.sidebar.checkbox("Haltestellen", value=True)
+    show_transport = st.sidebar.checkbox("Haltestellen", value=True)
+    show_routes_full = st.sidebar.checkbox("Vollständige Linien (außerhalb Moabits)", value=False)
+else:
+    show_transport = False
+st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 show_cycling = st.sidebar.checkbox("Radwege", value=False)
 if show_cycling:
     legend_html = "".join(
@@ -246,6 +254,17 @@ if show_cycling:
         for label, colour in CYCLE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
+show_bikeshare = st.sidebar.checkbox("Leihräder", value=False)
+if show_bikeshare:
+    st.sidebar.markdown(
+        "<small>"
+        '<span style="color:green">&#9679;</span> Räder verfügbar<br>'
+        '<span style="color:orange">&#9679;</span> Wenige Räder (1–2)<br>'
+        '<span style="color:red">&#9679;</span> Keine Räder'
+        "</small>",
+        unsafe_allow_html=True,
+    )
+st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 show_wohnlagen = st.sidebar.checkbox("Wohnlagenkarte", value=False)
 if show_wohnlagen:
     legend_html = "".join(
@@ -260,7 +279,7 @@ if show_greenspaces:
         for label, colour in GREEN_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_amenities = st.sidebar.checkbox("Einrichtungen", value=False)
+show_amenities = st.sidebar.checkbox("Nahversorgung", value=False)
 if show_amenities:
     legend_html = "".join(
         f'<span style="color:{colour}">&#9632;</span> {label}<br>'
@@ -281,6 +300,10 @@ with tab_map:
         with st.spinner("Lade Radwege..."):
             lanes = get_lanes()
 
+    if show_bikeshare:
+        with st.spinner("Lade Leihrad-Daten..."):
+            bikeshare_stations = get_bikeshare_stations()
+
     if show_wohnlagen:
         with st.spinner("Lade Wohnlagenkarte..."):
             wohnlagen = get_wohnlagen()
@@ -290,7 +313,7 @@ with tab_map:
             greenspaces = get_greenspaces()
 
     if show_amenities:
-        with st.spinner("Lade Einrichtungen..."):
+        with st.spinner("Lade Nahversorgung..."):
             amenities = get_amenities()
 
     if show_routes:
@@ -391,6 +414,21 @@ with tab_map:
             tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Radweg:"]),
         ).add_to(m)
 
+    if show_bikeshare:
+        for station in bikeshare_stations:
+            folium.Marker(
+                location=[station["lat"], station["lon"]],
+                icon=folium.Icon(color=station["colour"], icon="bicycle", prefix="fa"),
+                tooltip=folium.Tooltip(
+                    f"<span style='font-size:15px'>"
+                    f"<b>{station['name']}</b><br>"
+                    f"Fahrräder verfügbar: {station['bikes']}<br>"
+                    f"Stellplätze frei: {station['docks']}<br>"
+                    f"Kapazität: {station['capacity']}"
+                    f"</span>"
+                ),
+            ).add_to(m)
+
     if show_wohnlagen:
         wol_colours = {k: v["colour"] for k, v in WOL_STYLE.items()}
 
@@ -417,7 +455,6 @@ with tab_map:
             style  = stop_style(stop)
             folium.Marker(
                 location=[stop["lat"], stop["lon"]],
-                popup=folium.Popup(name, max_width=200),
                 tooltip=name,
                 icon=folium.Icon(color=style["color"], icon=style["icon"], prefix="fa"),
             ).add_to(cluster)
@@ -438,7 +475,6 @@ with tab_map:
     if map_data.get("zoom"):
         st.session_state.map_zoom = map_data["zoom"]
 
-    # Update selected stop only when a transport stop marker is clicked
     if show_transport and map_data.get("last_object_clicked"):
         click = map_data["last_object_clicked"]
         clat, clng = click.get("lat"), click.get("lng")
@@ -778,10 +814,10 @@ with tab_demographics:
         "Berlin (median)":            [5.82, 6.17, 7.40, 8.05, 8.25,  8.80,  9.07, 10.15, 10.32, 10.45, 10.14, 10.55, 11.54, 13.99, 15.74, 15.78],
     }
 
-    years = IBB_DATA["year"]
+    ibb_years = IBB_DATA["year"]
     bezirke = [k for k in IBB_DATA if k != "year"]
 
-    # Colour map — highlight Mitte and Berlin, grey others
+    # Highlight Mitte and Berlin median, mute the rest
     BEZIRK_COLOURS = {
         "Mitte":                      "#7A3030",
         "Berlin (median)":            "#9E9E9E",
@@ -803,7 +839,7 @@ with tab_demographics:
         is_key = bezirk == "Mitte"
         is_berlin = bezirk == "Berlin (median)"
         fig_rent.add_trace(go.Scatter(
-            x=years,
+            x=ibb_years,
             y=IBB_DATA[bezirk],
             mode="lines+markers",
             name=bezirk,
