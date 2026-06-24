@@ -132,7 +132,7 @@ def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
             diff = _hhmm_to_minutes(t_real) - _hhmm_to_minutes(t_plan)
             if diff < -720:
                 diff += 1440
-            delay_str = f"+{diff} min" if diff > 0 else f"{diff} min"
+            delay_str = f"+{diff} min" if diff > 0 else ("pünktlich" if diff == 0 else f"{diff} min")
         else:
             delay_str = "pünktlich"
         rows.append({
@@ -177,7 +177,7 @@ def fetch_departures(stop_id=HBF_STOP_ID, results=25):
             diff = _hhmm_to_minutes(t_real) - _hhmm_to_minutes(t_plan)
             if diff < -720:
                 diff += 1440  # midnight rollover
-            delay_str = f"+{diff} min" if diff > 0 else f"{diff} min"
+            delay_str = f"+{diff} min" if diff > 0 else ("pünktlich" if diff == 0 else f"{diff} min")
         else:
             delay_str = "pünktlich"
         rows.append({
