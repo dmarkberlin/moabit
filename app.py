@@ -1,6 +1,8 @@
+import base64
 import json
 import os
 import pathlib
+import re
 import pandas as pd
 import requests
 import streamlit as st
@@ -83,6 +85,40 @@ def get_routes():
 def get_routes_full():
     return fetch_routes_full()
 
+def _svg_uri(filename, scale=1.0, title=None):
+    path = os.path.join("images", filename)
+    with open(path, "r", encoding="utf-8") as f:
+        svg = f.read()
+    if title:
+        svg = re.sub(r'(<svg[^>]*>)', rf'\1<title>{title}</title>', svg, count=1)
+    if scale != 1.0:
+        # Wrap in a larger canvas so the icon appears smaller within the cell
+        pad = (1 - scale) / 2 * 100
+        inner = scale * 100
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+            f'<title>{title}</title>'
+            f'<image href="data:image/svg+xml;base64,{base64.b64encode(svg.encode()).decode()}" '
+            f'x="{pad}" y="{pad}" width="{inner}" height="{inner}"/>'
+            f'</svg>'
+        )
+    data = base64.b64encode(svg.encode()).decode()
+    return f"data:image/svg+xml;base64,{data}"
+
+_TYPE_ICON = {
+    "S":          _svg_uri("S-Bahn-Logo.svg",             title="S-Bahn"),
+    "U":          _svg_uri("U-Bahn-Logo-BVG.svg",         title="U-Bahn"),
+    "Tram":       _svg_uri("Tram-Logo-BVG.svg",           title="Tram"),
+    "Bus":        _svg_uri("BUS-Logo-BVG.svg",            title="Bus"),
+    "ExpressBus": _svg_uri("BUS-Logo-BVG.svg",            title="ExpressBus"),
+    "NachtBus":   _svg_uri("BUS-Logo-BVG.svg",            title="Nachtbus"),
+    "Ferry":      _svg_uri("Fähre-Logo-BVG.svg",          title="Fähre"),
+    "RB":         _svg_uri("VBB_Bahn-Regionalverkehr.svg", title="Regionalbahn"),
+    "RE":         _svg_uri("VBB_Bahn-Regionalverkehr.svg", title="Regionalexpress"),
+    "IC":         _svg_uri("IC-Logo.svg",  scale=0.90,    title="InterCity"),
+    "ICE":        _svg_uri("ICE-Logo.svg", scale=0.90,    title="InterCityExpress"),
+}
+
 def _fmt_int(n) -> str:
     return f"{int(n):,}".replace(",", ".")
 
@@ -136,6 +172,7 @@ def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
         else:
             delay_str = "pünktlich"
         rows.append({
+            "Icon":       _TYPE_ICON.get(cat, ""),
             "Linie":      name,
             "Typ":        cat,
             "Herkunft":   j.get("dirTxt") or "?",
@@ -181,6 +218,7 @@ def fetch_departures(stop_id=HBF_STOP_ID, results=25):
         else:
             delay_str = "pünktlich"
         rows.append({
+            "Icon":        _TYPE_ICON.get(cat, ""),
             "Linie":       name,
             "Typ":         cat,
             "Richtung":    j.get("dirTxt") or "?",
@@ -435,8 +473,9 @@ with tab_map:
                     use_container_width=True,
                     hide_index=True,
                     height="content",
-                    column_order=["Linie", "Typ", "Richtung", "Abfahrt", "Verspätung"],
+                    column_order=["Icon", "Linie", "Typ", "Richtung", "Abfahrt", "Verspätung"],
                     column_config={
+                        "Icon":       st.column_config.ImageColumn("", width="small"),
                         "Linie":      st.column_config.TextColumn("Linie",      width="small"),
                         "Typ":        st.column_config.TextColumn("Typ",        width="small"),
                         "Richtung":   st.column_config.TextColumn("Richtung"),
@@ -811,7 +850,7 @@ with tab_departures:
             st.error(f"Abfahrtsdaten konnten nicht geladen werden: {e}")
             rows = []
     if rows:
-        _dep_cols = ["Linie", "Richtung", "Gleis", "Abfahrt", "Verspätung"] if _is_mobile else ["Linie", "Typ", "Richtung", "Gleis", "Abfahrt", "Verspätung"]
+        _dep_cols = ["Icon", "Linie", "Richtung", "Gleis", "Abfahrt", "Verspätung"] if _is_mobile else ["Icon", "Linie", "Typ", "Richtung", "Gleis", "Abfahrt", "Verspätung"]
         st.dataframe(
             rows,
             use_container_width=True,
@@ -819,6 +858,7 @@ with tab_departures:
             height="content",
             column_order=_dep_cols,
             column_config={
+                "Icon":       st.column_config.ImageColumn("", width="small"),
                 "Linie":      st.column_config.TextColumn("Linie",                                        width="small"),
                 "Typ":        st.column_config.TextColumn("Typ",                                          width="small"),
                 "Richtung":   st.column_config.TextColumn("Richtung"),
@@ -842,7 +882,7 @@ with tab_arrivals:
             st.error(f"Ankunftsdaten konnten nicht geladen werden: {e}")
             rows = []
     if rows:
-        _arr_cols = ["Linie", "Herkunft", "Gleis", "Ankunft", "Verspätung"] if _is_mobile else ["Linie", "Typ", "Herkunft", "Gleis", "Ankunft", "Verspätung"]
+        _arr_cols = ["Icon", "Linie", "Herkunft", "Gleis", "Ankunft", "Verspätung"] if _is_mobile else ["Icon", "Linie", "Typ", "Herkunft", "Gleis", "Ankunft", "Verspätung"]
         st.dataframe(
             rows,
             use_container_width=True,
@@ -850,6 +890,7 @@ with tab_arrivals:
             height="content",
             column_order=_arr_cols,
             column_config={
+                "Icon":       st.column_config.ImageColumn("", width="small"),
                 "Linie":      st.column_config.TextColumn("Linie",                                        width="small"),
                 "Typ":        st.column_config.TextColumn("Typ",                                          width="small"),
                 "Herkunft":   st.column_config.TextColumn("Herkunft"),
