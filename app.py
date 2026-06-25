@@ -9,7 +9,7 @@ import streamlit as st
 
 os.chdir(pathlib.Path(__file__).parent)
 import folium
-from folium.plugins import MarkerCluster
+from folium.plugins import MarkerCluster, LocateControl
 from streamlit_folium import st_folium
 
 import plotly.graph_objects as go
@@ -20,6 +20,12 @@ from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
+from layers.noise import fetch_noise_data, THRESHOLDS, DB_BANDS
+from layers.airquality import (
+    fetch_current, fetch_history,
+    STATION_NAME, STATION_LAT, STATION_LON,
+    MOABIT_STATIONS, LIMITS, INDEX_LABELS,
+)
 from layers.demographics import (
     population_over_time, migration_over_time, nationality_over_time,
     COUNTRY_COLOURS,
@@ -89,6 +95,18 @@ def get_routes_full():
 @st.cache_data(ttl=300)
 def get_bikeshare_stations():
     return fetch_bikeshare_stations()
+
+@st.cache_data(ttl=86400)
+def get_noise_data():
+    return fetch_noise_data()
+
+@st.cache_data(ttl=3600)
+def get_airquality_current():
+    return fetch_current()
+
+@st.cache_data(ttl=86400)
+def get_airquality_history():
+    return fetch_history(days=365)
 
 def _svg_uri(filename, scale=1.0, title=None):
     path = os.path.join("images", filename)
@@ -272,13 +290,6 @@ if show_wohnlagen:
         for v in [WOL_STYLE["gut"], WOL_STYLE["mittel"], WOL_STYLE["einfach"]]
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_greenspaces = st.sidebar.checkbox("Grünflächen", value=False)
-if show_greenspaces:
-    legend_html = "".join(
-        f'<span style="color:{colour}">&#9632;</span> {label}<br>'
-        for label, colour in GREEN_LEGEND.items()
-    )
-    st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
 show_amenities = st.sidebar.checkbox("Nahversorgung", value=False)
 if show_amenities:
     legend_html = "".join(
@@ -286,9 +297,33 @@ if show_amenities:
         for label, colour in AMENITY_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
+st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+show_greenspaces = st.sidebar.checkbox("Grünflächen", value=False)
+if show_greenspaces:
+    legend_html = "".join(
+        f'<span style="color:{colour}">&#9632;</span> {label}<br>'
+        for label, colour in GREEN_LEGEND.items()
+    )
+    st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
+show_airquality = st.sidebar.checkbox("Luftqualität", value=False)
+show_noise = st.sidebar.checkbox("Lärmkarte (2004)", value=False)
+noise_layer = "a_strlaerm_tag"
+if show_noise:
+    noise_source = st.sidebar.radio("Quelle", ["Straße", "Schiene"], horizontal=True, key="noise_source")
+    noise_time   = st.sidebar.radio("Zeit",   ["Tag",    "Nacht"],   horizontal=True, key="noise_time")
+    noise_layer  = {
+        ("Straße",  "Tag"):   "a_strlaerm_tag",
+        ("Straße",  "Nacht"): "b_strlaerm_nacht",
+        ("Schiene", "Tag"):   "ca_laerm_schiene_tag_links,cb_laerm_schiene_tag_rechts",
+        ("Schiene", "Nacht"): "da_schienlaerm_nachts_links,db_schienlaerm_nachts_rechts",
+    }[(noise_source, noise_time)]
+    _theme = st.get_option("theme.base") or "light"
+    _legend_file = "images/noise_legend_dark.png" if _theme == "dark" else "images/noise_legend_light.png"
+    st.sidebar.image(_legend_file, use_container_width=False)
+    st.sidebar.markdown("<small>Quelle: Umweltatlas Berlin 2004</small>", unsafe_allow_html=True)
 
 # --- Tabs ---
-tab_map, tab_departures, tab_arrivals, tab_demographics = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung"])
+tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung", "Umwelt"])
 
 # --- Map tab ---
 with tab_map:
@@ -328,6 +363,9 @@ with tab_map:
         st.session_state.map_center = [52.529, 13.341]
     if "map_zoom" not in st.session_state:
         st.session_state.map_zoom = 13 if _is_mobile else 14
+    if show_airquality and not st.session_state.get("_prev_airquality", False):
+        st.session_state.map_zoom = max(st.session_state.map_zoom - 1, 10)
+    st.session_state._prev_airquality = show_airquality
 
     m = folium.Map(
         location=st.session_state.map_center,
@@ -462,6 +500,46 @@ with tab_map:
     if "selected_stop" not in st.session_state:
         st.session_state.selected_stop = None
 
+    if show_airquality:
+        with st.spinner("Lade Luftqualitätsdaten..."):
+            aq_current = get_airquality_current()
+        readings = "<br>".join(
+            f"{label}: {v['value']} {v['unit']}"
+            for label, v in aq_current.items()
+        )
+        folium.Marker(
+            location=[STATION_LAT, STATION_LON],
+            icon=folium.Icon(color="lightgray", icon="cloud", prefix="fa"),
+            tooltip=folium.Tooltip(
+                f"<span style='font-size:15px'>"
+                f"<b>{STATION_NAME}</b><br>{readings}"
+                f"</span>"
+            ),
+        ).add_to(m)
+        for s in MOABIT_STATIONS:
+            folium.Marker(
+                location=[s["lat"], s["lon"]],
+                icon=folium.Icon(color="lightgray", icon="cloud", prefix="fa"),
+                tooltip=folium.Tooltip(
+                    f"<span style='font-size:15px'>"
+                    f"<b>{s['name']}</b><br>Keine Echtzeit-Daten"
+                    f"</span>"
+                ),
+            ).add_to(m)
+
+    if show_noise:
+        folium.WmsTileLayer(
+            url="https://gdi.berlin.de/services/wms/ua_laerm_2004",
+            layers=noise_layer,
+            fmt="image/png",
+            transparent=True,
+            version="1.3.0",
+            attr="Umweltatlas Berlin 2004",
+            opacity=0.7,
+        ).add_to(m)
+
+    LocateControl(auto_start=False).add_to(m)
+
     map_data = st_folium(
         m,
         use_container_width=True,
@@ -484,7 +562,6 @@ with tab_map:
             if dist < 0.002:
                 st.session_state.selected_stop = matched
 
-    # Departure table — persists via session_state across reruns
     if show_transport and st.session_state.selected_stop:
         sel = st.session_state.selected_stop
         st.markdown(f"**{sel['name']}** – nächste Abfahrten")
@@ -937,3 +1014,169 @@ with tab_arrivals:
         )
     else:
         st.info("Keine Ankünfte gefunden.")
+
+# --- Umwelt tab ---
+with tab_umwelt:
+    st.caption(f"Messstation: {STATION_NAME} (DEBE010) · Quelle: Umweltbundesamt")
+
+    with st.spinner("Lade Luftqualitätsdaten..."):
+        try:
+            aq_current = get_airquality_current()
+            aq_history = get_airquality_history()
+        except Exception as e:
+            st.error(f"Luftqualitätsdaten konnten nicht geladen werden: {e}")
+            aq_current = {}
+            aq_history = pd.DataFrame()
+
+    if aq_current:
+        st.subheader("Aktuelle Luftqualität")
+        cols = st.columns(len(aq_current))
+        for col, (label, data) in zip(cols, aq_current.items()):
+            idx = data["index"]
+            idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
+            limit = LIMITS.get(label)
+            delta = f"{data['value'] - limit:+.0f} µg/m³ ggü. Grenzwert" if limit else None
+            delta_colour = "inverse" if (limit and data["value"] > limit) else "normal"
+            col.metric(
+                label=f"{label} ({data['unit']})",
+                value=data["value"],
+                delta=delta,
+                delta_color=delta_colour,
+            )
+            col.markdown(
+                f"<small style='color:{idx_colour}'>{idx_label}</small>",
+                unsafe_allow_html=True,
+            )
+
+    if not aq_history.empty:
+        st.divider()
+        st.subheader("Luftqualität im Jahresverlauf (Tagesmittelwerte)")
+        fig_aq = go.Figure()
+        colour_map = {"NO₂": "#E53935", "PM₁₀": "#FB8C00", "PM₂,₅": "#8E24AA", "O₃": "#1E88E5"}
+        for col in [c for c in aq_history.columns if c != "date"]:
+            fig_aq.add_trace(go.Scatter(
+                x=aq_history["date"],
+                y=aq_history[col],
+                mode="lines",
+                name=col,
+                line=dict(color=colour_map.get(col, "#888"), width=1.5),
+            ))
+        # Add EU limit reference lines
+        for label, limit in LIMITS.items():
+            if label in colour_map:
+                fig_aq.add_hline(
+                    y=limit,
+                    line_dash="dot",
+                    line_color=colour_map[label],
+                    opacity=0.4,
+                    annotation_text=f"{label} Grenzwert",
+                    annotation_position="right",
+                    annotation_font_size=10,
+                )
+        fig_aq.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="µg/m³"),
+            xaxis_title="Datum",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            margin=dict(t=40, b=20),
+            height=420,
+        )
+        st.plotly_chart(fig_aq, use_container_width=True, config=_plot_config)
+        st.caption(
+            "Gestrichelte Linien zeigen EU-Grenzwerte: NO₂ 40 µg/m³ (Jahresmittel), "
+            "PM₁₀ 50 µg/m³ (Tagesmittel), PM₂,₅ 25 µg/m³ (Jahresmittel), O₃ 120 µg/m³ (8-Stunden-Maximum). "
+            "O₃ steigt im Sommer — die 8-Stunden-Maxima liegen über den Tagesmitteln. Hinweis: Für den gesamten Dezember 2025 liegt nur ein Datenpunkt vor (am 31. Dezember) – die Messstation war mit ziemlicher Sicherheit aufgrund von Wartungs- oder Reparaturarbeiten außer Betrieb."
+        )
+
+    # --- Noise section ---
+    st.divider()
+    st.subheader("Straßenverkehrslärm (Umweltatlas Berlin 2004)")
+    st.caption(
+        "Beurteilungspegel entlang der Straßenabschnitte im Moabiter Gebiet (ca. Begrenzungsrechteck). "
+        "Quelle: Senatsverwaltung für Stadtentwicklung, Umweltatlas 2004."
+    )
+
+    with st.spinner("Lade Lärmdaten..."):
+        try:
+            noise = get_noise_data()
+        except Exception as e:
+            st.error(f"Lärmdaten konnten nicht geladen werden: {e}")
+            noise = None
+
+    if noise:
+        m_data = noise["metrics"]
+
+        # Headline metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Straßenabschnitte",    m_data["n_segments"])
+        col2.metric("Median Tag",           f"{m_data['median_day']} dB")
+        col3.metric("Median Nacht",         f"{m_data['median_night']} dB")
+        col4.metric("Tag-Nacht-Differenz",  f"{m_data['median_day'] - m_data['median_night']:.1f} dB")
+
+        st.markdown(
+            f"**{m_data['above_day_pct']} %** der Abschnitte überschreiten den EU-Richtwert tagsüber ({THRESHOLDS['Tag']} dB) · "
+            f"**{m_data['above_night_pct']} %** nachts ({THRESHOLDS['Nacht']} dB)"
+        )
+
+        st.divider()
+        col_dist, col_top = st.columns(2)
+
+        # Distribution chart
+        with col_dist:
+            st.subheader("Pegelverteilung: Tag vs. Nacht")
+            colours = {"Tag": "#E53935", "Nacht": "#1E88E5"}
+            fig_dist = go.Figure()
+            for col_name in ["Tag", "Nacht"]:
+                fig_dist.add_trace(go.Bar(
+                    name=col_name,
+                    x=DB_BANDS,
+                    y=noise["dist"][col_name],
+                    marker_color=colours[col_name],
+                ))
+            fig_dist.add_vline(
+                x=1.5, line_dash="dot", line_color="white", opacity=0.4,
+                annotation_text=f"EU-Richtwert Tag ({THRESHOLDS['Tag']} dB)",
+                annotation_font_size=10, annotation_position="top right",
+            )
+            fig_dist.update_layout(
+                barmode="group",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Anzahl Abschnitte"),
+                xaxis_title="Pegelklasse (dB)",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=20),
+                height=380,
+            )
+            st.plotly_chart(fig_dist, use_container_width=True, config=_plot_config)
+
+        # Top streets chart
+        with col_top:
+            st.subheader("Lauteste Straßen (Tagesmittel)")
+            top_df = noise["top"].sort_values("dB (Tag)")
+            fig_top = go.Figure(go.Bar(
+                x=top_df["dB (Tag)"],
+                y=top_df["Straße"],
+                orientation="h",
+                marker_color=[
+                    "#E53935" if v >= 70 else "#FB8C00" if v >= 65 else "#FDD835"
+                    for v in top_df["dB (Tag)"]
+                ],
+                text=[f"{v:.1f}" for v in top_df["dB (Tag)"]],
+                textposition="outside",
+            ))
+            fig_top.add_vline(
+                x=THRESHOLDS["Tag"], line_dash="dot", line_color="white", opacity=0.4,
+                annotation_text=f"EU-Richtwert ({THRESHOLDS['Tag']} dB)",
+                annotation_font_size=10, annotation_position="top right",
+            )
+            fig_top.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="dB"),
+                xaxis_range=[50, 78],
+                margin=dict(t=40, b=20, r=60),
+                height=380,
+            )
+            st.plotly_chart(fig_top, use_container_width=True, config=_plot_config)
