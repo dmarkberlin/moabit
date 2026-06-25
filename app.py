@@ -44,6 +44,7 @@ try:
 except AttributeError:
     _ua = ""
 _is_mobile = any(kw in _ua for kw in ("Mobile", "Android", "iPhone", "iPad"))
+st.sidebar.caption(f"Mobile: {_is_mobile}")
 _plot_config = {"staticPlot": True} if _is_mobile else {}
 
 
@@ -147,6 +148,26 @@ def _fmt_int(n) -> str:
 
 def _fmt_pct(p) -> str:
     return f"{p:.1f}".replace(".", ",") + " %"
+
+def _fmt_float(v, decimals=1) -> str:
+    return f"{v:.{decimals}f}".replace(".", ",")
+
+def _metrics_2col(items):
+    cells = ""
+    for item in items:
+        delta_html = ""
+        if item.get("delta"):
+            c = item.get("delta_colour", "#808495")
+            delta_html = ('<div style="font-size:0.8rem;color:' + c + ';margin-top:2px">' + item["delta"] + '</div>')
+        note_html = ('<div style="font-size:0.8rem;margin-top:2px">' + item["note_html"] + '</div>') if item.get("note_html") else ""
+        cells += (
+            '<div style="padding:0.4rem 0">'
+            + '<div style="font-size:0.8rem;color:rgba(250,250,250,0.6)">' + item["label"] + '</div>'
+            + '<div style="font-size:1.75rem;font-weight:600;line-height:1.2;color:#fafafa">' + str(item["value"]) + '</div>'
+            + delta_html + note_html
+            + '</div>'
+        )
+    st.html('<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.25rem 1rem;padding:0.25rem 0">' + cells + '</div>')
 
 HBF_STOP_ID = "900003201"
 _HAFAS_URL = "https://fahrinfo.vbb.de/bin/mgate.exe"
@@ -605,13 +626,21 @@ with tab_demographics:
     st.caption(f"Quelle: Amt für Statistik Berlin-Brandenburg, Einwohnerregisterstatistik 31.12.{_latest_year}")
 
     # --- Headline metrics ---
-    col1, col2, col3, col4 = st.columns(4)
     if not trend.empty:
         latest = trend.iloc[-1]
-        col1.metric("Einwohner",          _fmt_int(latest['total']))
-        col2.metric("Frauenanteil",        _fmt_pct(latest['female_pct']))
-        col3.metric("Ausländeranteil",     _fmt_pct(latest['foreign_pct']))
-        col4.metric("18- bis 44-Jährige", _fmt_pct(latest['young_adult_pct']))
+        if _is_mobile:
+            _metrics_2col([
+                {"label": "Einwohner",          "value": _fmt_int(latest['total'])},
+                {"label": "Frauenanteil",        "value": _fmt_pct(latest['female_pct'])},
+                {"label": "Ausländeranteil",     "value": _fmt_pct(latest['foreign_pct'])},
+                {"label": "18- bis 44-Jährige", "value": _fmt_pct(latest['young_adult_pct'])},
+            ])
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Einwohner",          _fmt_int(latest['total']))
+            col2.metric("Frauenanteil",        _fmt_pct(latest['female_pct']))
+            col3.metric("Ausländeranteil",     _fmt_pct(latest['foreign_pct']))
+            col4.metric("18- bis 44-Jährige", _fmt_pct(latest['young_adult_pct']))
 
     st.divider()
 
@@ -1030,23 +1059,40 @@ with tab_umwelt:
 
     if aq_current:
         st.subheader("Aktuelle Luftqualität")
-        cols = st.columns(len(aq_current))
-        for col, (label, data) in zip(cols, aq_current.items()):
-            idx = data["index"]
-            idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
-            limit = LIMITS.get(label)
-            delta = f"{data['value'] - limit:+.0f} µg/m³ ggü. Grenzwert" if limit else None
-            delta_colour = "inverse" if (limit and data["value"] > limit) else "normal"
-            col.metric(
-                label=f"{label} ({data['unit']})",
-                value=data["value"],
-                delta=delta,
-                delta_color=delta_colour,
-            )
-            col.markdown(
-                f"<small style='color:{idx_colour}'>{idx_label}</small>",
-                unsafe_allow_html=True,
-            )
+        if _is_mobile:
+            _aq_items = []
+            for label, data in aq_current.items():
+                idx = data["index"]
+                idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
+                limit = LIMITS.get(label)
+                delta = (f"{data['value'] - limit:+.0f}".replace(".", ",") + " µg/m³ ggü. Grenzwert") if limit else None
+                _delta_colour = "#ff4b4b" if (limit and data["value"] > limit) else "#21c354"
+                _aq_items.append({
+                    "label": label + " (" + data["unit"] + ")",
+                    "value": data["value"],
+                    "delta": delta,
+                    "delta_colour": _delta_colour if delta else None,
+                    "note_html": '<span style="color:' + idx_colour + '">' + idx_label + '</span>',
+                })
+            _metrics_2col(_aq_items)
+        else:
+            cols = st.columns(len(aq_current))
+            for col, (label, data) in zip(cols, aq_current.items()):
+                idx = data["index"]
+                idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
+                limit = LIMITS.get(label)
+                delta = (f"{data['value'] - limit:+.0f}".replace(".", ",") + " µg/m³ ggü. Grenzwert") if limit else None
+                delta_colour = "inverse" if (limit and data["value"] > limit) else "normal"
+                col.metric(
+                    label=f"{label} ({data['unit']})",
+                    value=data["value"],
+                    delta=delta,
+                    delta_color=delta_colour,
+                )
+                col.markdown(
+                    f"<small style='color:{idx_colour}'>{idx_label}</small>",
+                    unsafe_allow_html=True,
+                )
 
     if not aq_history.empty:
         st.divider()
@@ -1108,15 +1154,23 @@ with tab_umwelt:
         m_data = noise["metrics"]
 
         # Headline metrics
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Straßenabschnitte",    m_data["n_segments"])
-        col2.metric("Median Tag",           f"{m_data['median_day']} dB")
-        col3.metric("Median Nacht",         f"{m_data['median_night']} dB")
-        col4.metric("Tag-Nacht-Differenz",  f"{m_data['median_day'] - m_data['median_night']:.1f} dB")
+        if _is_mobile:
+            _metrics_2col([
+                {"label": "Straßenabschnitte",  "value": m_data["n_segments"]},
+                {"label": "Median Tag",          "value": f"{_fmt_float(m_data['median_day'])} dB"},
+                {"label": "Median Nacht",        "value": f"{_fmt_float(m_data['median_night'])} dB"},
+                {"label": "Tag-Nacht-Differenz", "value": f"{_fmt_float(m_data['median_day'] - m_data['median_night'])} dB"},
+            ])
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Straßenabschnitte",    m_data["n_segments"])
+            col2.metric("Median Tag",           f"{_fmt_float(m_data['median_day'])} dB")
+            col3.metric("Median Nacht",         f"{_fmt_float(m_data['median_night'])} dB")
+            col4.metric("Tag-Nacht-Differenz",  f"{_fmt_float(m_data['median_day'] - m_data['median_night'])} dB")
 
         st.markdown(
-            f"**{m_data['above_day_pct']} %** der Abschnitte überschreiten den EU-Richtwert tagsüber ({THRESHOLDS['Tag']} dB) · "
-            f"**{m_data['above_night_pct']} %** nachts ({THRESHOLDS['Nacht']} dB)"
+            f"**{_fmt_float(m_data['above_day_pct'])} %** der Abschnitte überschreiten den EU-Richtwert tagsüber ({THRESHOLDS['Tag']} dB) · "
+            f"**{_fmt_float(m_data['above_night_pct'])} %** nachts ({THRESHOLDS['Nacht']} dB)"
         )
 
         st.divider()
@@ -1163,7 +1217,7 @@ with tab_umwelt:
                     "#E53935" if v >= 70 else "#FB8C00" if v >= 65 else "#FDD835"
                     for v in top_df["dB (Tag)"]
                 ],
-                text=[f"{v:.1f}" for v in top_df["dB (Tag)"]],
+                text=[_fmt_float(v) for v in top_df["dB (Tag)"]],
                 textposition="outside",
             ))
             fig_top.add_vline(
