@@ -10,10 +10,11 @@ STATION_NAME = "Berlin Wedding"
 STATION_LAT  = 52.543
 STATION_LON  = 13.3493
 
-# Moabit stations — location only, no live data in UBA API
+# Nearby stations — location only, no data available via public API
 MOABIT_STATIONS = [
-    {"name": "Berlin Stromstraße",  "lat": 52.5272, "lon": 13.3431},
-    {"name": "Berlin Birkenstraße", "lat": 52.5315, "lon": 13.3443},
+    {"name": "Berlin Alt-Moabit",   "lat": 52.5239, "lon": 13.3288, "active": False, "years": "2007–"},
+    {"name": "Berlin Stromstraße",  "lat": 52.5272, "lon": 13.3431, "active": False, "years": "2019–2022"},
+    {"name": "Berlin Birkenstraße", "lat": 52.5315, "lon": 13.3443, "active": False, "years": "2019–2020"},
 ]
 
 COMPONENTS = {

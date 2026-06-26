@@ -21,6 +21,7 @@ from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_L
 from layers.routes import fetch_routes, fetch_routes_full, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
 from layers.noise import fetch_noise_data, THRESHOLDS, DB_BANDS
+from layers.crime import fetch_crime_data, fetch_crime_data_by_area, fetch_bezirk_comparison, fetch_mitte_lor_data, CATEGORIES, DEFAULT_CATEGORIES
 from layers.airquality import (
     fetch_current, fetch_history,
     STATION_NAME, STATION_LAT, STATION_LON,
@@ -44,11 +45,11 @@ try:
 except AttributeError:
     _ua = ""
 _is_mobile = any(kw in _ua for kw in ("Mobile", "Android", "iPhone", "iPad"))
-st.sidebar.caption(f"Mobile: {_is_mobile}")
 _plot_config = {"staticPlot": True} if _is_mobile else {}
 
 
-st.title("Moabiter Dashboard")
+_title_size = "1.3rem" if _is_mobile else "1.8rem"
+st.markdown(f"<h1 style='font-size:{_title_size}; margin-bottom:0.25rem'>Moabiter Dashboard</h1>", unsafe_allow_html=True)
 
 with open("data/moabit_boundary.geojson", encoding="utf-8") as f:
     boundary = json.load(f)
@@ -108,6 +109,22 @@ def get_airquality_current():
 @st.cache_data(ttl=86400)
 def get_airquality_history():
     return fetch_history(days=365)
+
+@st.cache_data(ttl=86400)
+def get_crime_data():
+    return fetch_crime_data()
+
+@st.cache_data(ttl=86400)
+def get_bezirk_comparison():
+    return fetch_bezirk_comparison()
+
+@st.cache_data(ttl=86400)
+def get_mitte_lor_data():
+    return fetch_mitte_lor_data()
+
+@st.cache_data(ttl=86400)
+def get_crime_data_by_area():
+    return fetch_crime_data_by_area()
 
 def _svg_uri(filename, scale=1.0, title=None):
     path = os.path.join("images", filename)
@@ -277,7 +294,7 @@ show_routes = st.sidebar.checkbox("Verkehrslinien", value=True)
 show_routes_full = False
 if show_routes:
     legend_html = "".join(
-        f'<span style="color:{colour}">&#9644;</span> {label}<br>'
+        f'<span style="color:{colour}"><b>&#11834;</b></span> {label}<br>'
         for label, colour in ROUTE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
@@ -289,7 +306,7 @@ st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 show_cycling = st.sidebar.checkbox("Radwege", value=False)
 if show_cycling:
     legend_html = "".join(
-        f'<span style="color:{colour}">&#9644;</span> {label}<br>'
+        f'<span style="color:{colour}"><b>&#11834;</b></span> {label}<br>'
         for label, colour in CYCLE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
@@ -344,7 +361,7 @@ if show_noise:
     st.sidebar.markdown("<small>Quelle: Umweltatlas Berlin 2004</small>", unsafe_allow_html=True)
 
 # --- Tabs ---
-tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung", "Umwelt"])
+tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung", "Umwelt", "Kriminalität", "Über Moabit"])
 
 # --- Map tab ---
 with tab_map:
@@ -542,9 +559,10 @@ with tab_map:
                 location=[s["lat"], s["lon"]],
                 icon=folium.Icon(color="lightgray", icon="cloud", prefix="fa"),
                 tooltip=folium.Tooltip(
-                    f"<span style='font-size:15px'>"
-                    f"<b>{s['name']}</b><br>Keine Echtzeit-Daten"
-                    f"</span>"
+                    "<span style='font-size:15px'>"
+                    "<b>" + s['name'] + "</b>"
+                    "<br>" + s['years'] + " · Keine Daten verfügbar"
+                    "</span>"
                 ),
             ).add_to(m)
 
@@ -1098,7 +1116,7 @@ with tab_umwelt:
         st.divider()
         st.subheader("Luftqualität im Jahresverlauf (Tagesmittelwerte)")
         fig_aq = go.Figure()
-        colour_map = {"NO₂": "#E53935", "PM₁₀": "#FB8C00", "PM₂,₅": "#8E24AA", "O₃": "#1E88E5"}
+        colour_map = {"NO₂": "#C0504D", "PM₁₀": "#FB8C00", "PM₂,₅": "#8E24AA", "O₃": "#1E88E5"}
         for col in [c for c in aq_history.columns if c != "date"]:
             fig_aq.add_trace(go.Scatter(
                 x=aq_history["date"],
@@ -1179,7 +1197,7 @@ with tab_umwelt:
         # Distribution chart
         with col_dist:
             st.subheader("Pegelverteilung: Tag vs. Nacht")
-            colours = {"Tag": "#E53935", "Nacht": "#1E88E5"}
+            colours = {"Tag": "#C0504D", "Nacht": "#1E88E5"}
             fig_dist = go.Figure()
             for col_name in ["Tag", "Nacht"]:
                 fig_dist.add_trace(go.Bar(
@@ -1214,7 +1232,7 @@ with tab_umwelt:
                 y=top_df["Straße"],
                 orientation="h",
                 marker_color=[
-                    "#E53935" if v >= 70 else "#FB8C00" if v >= 65 else "#FDD835"
+                    "#C0504D" if v >= 70 else "#FB8C00" if v >= 65 else "#FDD835"
                     for v in top_df["dB (Tag)"]
                 ],
                 text=[_fmt_float(v) for v in top_df["dB (Tag)"]],
@@ -1234,3 +1252,452 @@ with tab_umwelt:
                 height=380,
             )
             st.plotly_chart(fig_top, use_container_width=True, config=_plot_config)
+
+# --- Kriminalität tab ---
+with tab_crime:
+    _BZ_COLOURS = {
+        "Charlottenburg-Wilmersdorf": "#1E88E5",
+        "Friedrichshain-Kreuzberg":   "#43A047",
+        "Lichtenberg":                "#8E24AA",
+        "Marzahn-Hellersdorf":        "#00ACC1",
+        "Mitte":                      "#C0504D",
+        "Neukölln":                     "#FB8C00",
+        "Pankow":                     "#6D4C41",
+        "Reinickendorf":              "#546E7A",
+        "Spandau":                    "#F4511E",
+        "Steglitz-Zehlendorf":        "#039BE5",
+        "Tempelhof-Schöneberg":       "#7CB342",
+        "Treptow-Köpenick":           "#FFB300",
+    }
+    _LOR_COLOURS = {
+        "Alexanderplatz":       "#8E24AA",
+        "Brunnenstraße Nord":   "#00ACC1",
+        "Brunnenstraße Süd":    "#43A047",
+        "Moabit (gesamt)":      "#FB8C00",
+        "Moabit Ost":           "#C0504D",
+        "Moabit West":          "#1E88E5",
+        "Osloer Straße":       "#6D4C41",
+        "Parkviertel":          "#546E7A",
+        "Regierungsviertel":    "#F4511E",
+        "Tiergarten Süd":      "#039BE5",
+        "Wedding Zentrum":      "#7CB342",
+    }
+    _CAT_COLOURS = {
+        cat: clr for cat, clr in zip(
+            sorted(CATEGORIES.keys()),
+            ["#1E88E5","#43A047","#8E24AA","#00ACC1","#C0504D","#FB8C00",
+             "#6D4C41","#546E7A","#F4511E","#039BE5","#7CB342","#FFB300",
+             "#FF6692","#B6E880","#FECB52","#19D3F3","#636EFA"]
+        )
+    }
+    st.caption("Quelle: Polizei Berlin, Kriminalitätsatlas (PKS) · Moabit West + Ost kombiniert")
+
+    with st.spinner("Lade Kriminalitätsdaten..."):
+        try:
+            crime_df = get_crime_data()
+        except Exception as e:
+            st.error(f"Kriminalitätsdaten konnten nicht geladen werden: {e}")
+            crime_df = None
+
+    if crime_df is not None:
+        latest_year = crime_df.index.max()
+        prev_year   = latest_year - 1
+
+        # --- Headline metrics ---
+        total_latest = crime_df.loc[latest_year, "Straftaten insgesamt"]
+        total_prev   = crime_df.loc[prev_year,   "Straftaten insgesamt"]
+        delta_total  = total_latest - total_prev
+
+        kieztaten_latest = crime_df.loc[latest_year, "Kieztaten"]
+        kieztaten_prev   = crime_df.loc[prev_year,   "Kieztaten"]
+        delta_kiez       = kieztaten_latest - kieztaten_prev
+
+        fahrrad_latest = crime_df.loc[latest_year, "Fahrraddiebstahl"]
+        fahrrad_prev   = crime_df.loc[prev_year,   "Fahrraddiebstahl"]
+        delta_fahrrad  = fahrrad_latest - fahrrad_prev
+
+        einbruch_latest = crime_df.loc[latest_year, "Wohnraumeinbruch"]
+        einbruch_prev   = crime_df.loc[prev_year,   "Wohnraumeinbruch"]
+        delta_einbruch  = einbruch_latest - einbruch_prev
+
+        def _crime_delta(d):
+            sign = "+" if d >= 0 else ""
+            return f"{sign}{_fmt_int(d)} ggü. {prev_year}"
+
+        if _is_mobile:
+            _metrics_2col([
+                {"label": f"Straftaten insgesamt ({latest_year})", "value": _fmt_int(total_latest),
+                 "delta": _crime_delta(delta_total),
+                 "delta_colour": "#ff4b4b" if delta_total > 0 else "#21c354"},
+                {"label": f"Kieztaten ({latest_year})", "value": _fmt_int(kieztaten_latest),
+                 "delta": _crime_delta(delta_kiez),
+                 "delta_colour": "#ff4b4b" if delta_kiez > 0 else "#21c354"},
+                {"label": f"Fahrraddiebstahl ({latest_year})", "value": _fmt_int(fahrrad_latest),
+                 "delta": _crime_delta(delta_fahrrad),
+                 "delta_colour": "#ff4b4b" if delta_fahrrad > 0 else "#21c354"},
+                {"label": f"Wohnraumeinbruch ({latest_year})", "value": _fmt_int(einbruch_latest),
+                 "delta": _crime_delta(delta_einbruch),
+                 "delta_colour": "#ff4b4b" if delta_einbruch > 0 else "#21c354"},
+            ])
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric(f"Straftaten insgesamt ({latest_year})", _fmt_int(total_latest),
+                        delta=_crime_delta(delta_total),
+                        delta_color="inverse" if delta_total > 0 else "normal")
+            col2.metric(f"Kieztaten ({latest_year})", _fmt_int(kieztaten_latest),
+                        delta=_crime_delta(delta_kiez),
+                        delta_color="inverse" if delta_kiez > 0 else "normal")
+            col3.metric(f"Fahrraddiebstahl ({latest_year})", _fmt_int(fahrrad_latest),
+                        delta=_crime_delta(delta_fahrrad),
+                        delta_color="inverse" if delta_fahrrad > 0 else "normal")
+            col4.metric(f"Wohnraumeinbruch ({latest_year})", _fmt_int(einbruch_latest),
+                        delta=_crime_delta(delta_einbruch),
+                        delta_color="inverse" if delta_einbruch > 0 else "normal")
+
+        st.divider()
+
+        # --- Bezirk comparison ---
+        st.subheader("Straftaten insgesamt im Berliner Vergleich")
+        st.caption("Moabit ist ein Ortsteil von Mitte — die Balken zeigen Bezirkswerte, nicht Moabit direkt.")
+        with st.spinner("Lade Bezirksdaten..."):
+            try:
+                bz_fall, bz_hz = get_bezirk_comparison()
+            except Exception as e:
+                st.error(f"Bezirksdaten konnten nicht geladen werden: {e}")
+                bz_fall, bz_hz = None, None
+
+        if bz_fall is not None:
+            _bz_sel_col, _bz_year_col, _ = st.columns([2, 1, 2])
+            with _bz_sel_col:
+                _bz_metric = st.radio(
+                    "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+                    horizontal=True, key="bz_metric"
+                )
+            with _bz_year_col:
+                _bz_years = sorted(bz_fall["year"].unique(), reverse=True)
+                _bz_year = st.selectbox("Jahr", options=_bz_years, index=0, key="bz_year")
+
+            _bz_use_hz = _bz_metric.startswith("HZ")
+            if _bz_use_hz:
+                _bz_data = bz_hz[bz_hz["year"] == _bz_year].sort_values("Bezirk", ascending=False)
+                _bz_x = _bz_data["HZ"].round(0).astype(int)
+                _bz_text = _bz_data["HZ"].apply(lambda v: _fmt_int(round(v)))
+                _bz_title = "HZ (pro 100 000 Einwohner)"
+            else:
+                _bz_data = bz_fall[bz_fall["year"] == _bz_year].sort_values("Bezirk", ascending=False)
+                _bz_x = _bz_data["Fallzahlen"]
+                _bz_text = _bz_data["Fallzahlen"].apply(_fmt_int)
+                _bz_title = "Fallzahlen"
+            _bz_colours = [_BZ_COLOURS.get(b, "#888") for b in _bz_data["Bezirk"]]
+            fig_bz = go.Figure(go.Bar(
+                x=_bz_x,
+                y=_bz_data["Bezirk"],
+                orientation="h",
+                marker_color=_bz_colours,
+                text=_bz_text,
+                textposition="outside",
+            ))
+            fig_bz.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_bz_title),
+                margin=dict(t=10, b=20, r=80),
+                height=400,
+            )
+            st.plotly_chart(fig_bz, use_container_width=True, config=_plot_config)
+
+        st.divider()
+
+        # --- All-Bezirke trend ---
+        st.subheader("Alle Bezirke im Vergleich")
+        _bez_metric = st.radio(
+            "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+            horizontal=True, key="bez_trend_metric"
+        )
+        _use_hz = _bez_metric.startswith("HZ")
+        _btr_df = bz_hz if _use_hz else bz_fall
+        _btr_val = "HZ" if _use_hz else "Fallzahlen"
+        _btr_pivot = _btr_df.pivot(index="year", columns="Bezirk", values=_btr_val).sort_index()
+        _btr_pivot = _btr_pivot[sorted(_btr_pivot.columns)]
+        _fig_btr = go.Figure()
+        for _bez in _btr_pivot.columns:
+            _is_mitte = _bez == "Mitte"
+            _fig_btr.add_trace(go.Scatter(
+                x=_btr_pivot.index.tolist(),
+                y=_btr_pivot[_bez].tolist(),
+                name=_bez,
+                mode="lines+markers",
+                line=dict(width=2.5 if _is_mitte else 1.5, color=_BZ_COLOURS.get(_bez, "#888")),
+                marker=dict(size=5 if _is_mitte else 4),
+            ))
+        _fig_btr.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_btr_val),
+            xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            margin=dict(t=60, b=20),
+            height=460,
+        )
+        st.plotly_chart(_fig_btr, use_container_width=True, config=_plot_config)
+        st.caption("Mitte (rot) enthält Moabit. HZ = Häufigkeitszahl (Straftaten pro 100 000 Einwohner).")
+
+        st.subheader("Warum ist die Kriminalitätsrate in Moabit so hoch?")
+        st.markdown("""
+Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein genauerer Blick relativiert das Bild erheblich.
+
+**Mitte als touristisches Zentrum.** Moabit ist ein Ortsteil von Mitte — dem historischen Herz Berlins mit Alexanderplatz, Museumsinsel, Brandenburger Tor und Hackeschem Markt. Enormes Besucheraufkommen trifft hier auf eine vergleichsweise kleine gemeldete Wohnbevölkerung, was die HZ des gesamten Bezirks strukturell in die Höhe treibt — und Moabit als Ortsteil davon mit betrifft.
+
+**Hauptbahnhof-Effekt.** Deutschlands verkehrsreichster Bahnhof liegt am östlichen Rand Moabits und zieht täglich Hunderttausende Reisende an. Opportunistische Delikte wie Taschendiebstahl konzentrieren sich rund um Verkehrsknotenpunkte — und erhöhen die Fallzahlen strukturell.
+
+**Häufigkeitszahl und Bevölkerungsbasis.** Die HZ wird gegen die *gemeldete* Wohnbevölkerung berechnet, nicht gegen die tatsächliche Zahl der sich im Kiez aufhaltenden Personen. In Gebieten mit hohem Tagespublikum wie Moabit Ost ist die HZ daher systematisch überhöht.
+
+**Sozialer Brennpunkt Kleiner Tiergarten.** Die offene Drogenszene rund um den Kleinen Tiergarten erzeugt Drogen- und Beschaffungskriminalität, die in den Statistiken sichtbar ist.
+
+**Polizeipräsenz erhöht Erfassungsquote.** Gebiete mit starker Polizeipräsenz — etwa rund um Hbf und Kriminalgericht — weisen schlicht mehr *erfasste* Straftaten auf, nicht unbedingt mehr tatsächliche.
+""")
+
+        st.divider()
+
+        # --- Mitte LOR chart ---
+        st.subheader("Bezirk Mitte: Stadtteile im Vergleich")
+        _lor_metric = st.radio(
+            "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+            horizontal=True, key="lor_metric"
+        )
+        _lor_fz_df, _lor_hz_df = get_mitte_lor_data()
+        _lor_use_hz = _lor_metric.startswith("HZ")
+        _lor_src = _lor_hz_df if _lor_use_hz else _lor_fz_df
+        _lor_val = "HZ" if _lor_use_hz else "Fallzahlen"
+        _lor_pivot = _lor_src.pivot(index="year", columns="Gebiet", values=_lor_val).sort_index()
+        _lor_pivot = _lor_pivot[sorted(_lor_pivot.columns)]
+        _MOABIT_GEBIETE = {"Moabit West", "Moabit Ost", "Moabit (gesamt)"}
+        _fig_lor = go.Figure()
+        for _geb in _lor_pivot.columns:
+            _is_moabit = _geb in _MOABIT_GEBIETE
+            _fig_lor.add_trace(go.Scatter(
+                x=_lor_pivot.index.tolist(),
+                y=_lor_pivot[_geb].tolist(),
+                name=_geb,
+                mode="lines+markers",
+                line=dict(width=2.5 if _is_moabit else 1.5, color=_LOR_COLOURS.get(_geb, "#888")),
+                marker=dict(size=5 if _is_moabit else 4),
+            ))
+        _fig_lor.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_lor_val),
+            xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            margin=dict(t=60, b=20),
+            height=460,
+        )
+        st.plotly_chart(_fig_lor, use_container_width=True, config=_plot_config)
+        _lor_caption = "Moabit West (blau), Moabit Ost (rot), Moabit gesamt (orange). Alphabetische Reihenfolge."
+        if _lor_use_hz:
+            _lor_caption += " Kombinierte HZ für Moabit gesamt nicht verfügbar (bevölkerungsgewichtet)."
+        st.caption(_lor_caption)
+
+        st.divider()
+
+        # --- Trend chart ---
+        st.subheader("Entwicklung 2015–" + str(latest_year) + " (Moabit)")
+        all_cats = sorted(CATEGORIES.keys())
+        st.markdown(
+            """<style>
+            div[data-testid="stMultiSelect"] span[data-baseweb="tag"] {
+                background-color: #546E7A !important;
+            }
+            </style>""",
+            unsafe_allow_html=True
+        )
+        selected = st.multiselect(
+            "Deliktsbereiche",
+            options=all_cats,
+            default=DEFAULT_CATEGORIES,
+            key="crime_cats",
+        )
+        _swatch_html = '<div style="display:flex;flex-wrap:wrap;row-gap:4px;column-gap:12px;margin-top:4px;">'
+        for _c in all_cats:
+            _col = _CAT_COLOURS[_c]
+            _swatch_html += (
+                f'<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;">'
+                f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
+                f'background:{_col};flex-shrink:0;"></span>{_c}</span>'
+            )
+        _swatch_html += '</div>'
+        st.markdown(_swatch_html, unsafe_allow_html=True)
+
+        if selected:
+            fig_trend = go.Figure()
+            for cat in sorted(selected):
+                fig_trend.add_trace(go.Scatter(
+                    x=crime_df.index.tolist(),
+                    y=crime_df[cat].tolist(),
+                    name=cat,
+                    mode="lines+markers",
+                    line=dict(color=_CAT_COLOURS.get(cat, "#888"), width=2),
+                    marker=dict(size=5),
+                ))
+            fig_trend.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Fallzahlen"),
+                xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=60, b=20),
+                height=420,
+            )
+            st.plotly_chart(fig_trend, use_container_width=True, config=_plot_config)
+            st.caption(
+                "⚠️ 2016 zeigt einen auffälligen Ausreißer (+33 % gegenüber 2015), "
+                "der wahrscheinlich auf eine Änderung der Gebietsabgrenzung oder der statistischen "
+                "Erfassungsmethodik zurückzuführen ist. Die Daten für 2015 und 2016 sollten mit "
+                "Vorsicht interpretiert werden."
+            )
+
+        st.divider()
+
+        # --- Latest year breakdown ---
+        st.subheader("Alle Deliktsbereiche")
+        _crime_years = crime_df.index.tolist()[::-1]
+        _col_sel, _ = st.columns([1, 3])
+        with _col_sel:
+            _bar_year = st.selectbox("Jahr", options=_crime_years, index=0, key="crime_bar_year")
+        _by_area = get_crime_data_by_area()
+        _cats_bar = [c for c in CATEGORIES if c != "Straftaten insgesamt"]
+        _west = _by_area[_bar_year].get("Moabit West", {})
+        _ost  = _by_area[_bar_year].get("Moabit Ost",  {})
+        _sorted_cats = sorted(_cats_bar, reverse=True)
+        _vals_west = [_west.get(c, 0) for c in _sorted_cats]
+        _vals_ost  = [_ost.get(c, 0)  for c in _sorted_cats]
+        _totals    = [w + o for w, o in zip(_vals_west, _vals_ost)]
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(
+            x=_vals_west, y=_sorted_cats, orientation="h",
+            name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
+        ))
+        fig_bar.add_trace(go.Bar(
+            x=_vals_ost, y=_sorted_cats, orientation="h",
+            name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
+            text=[_fmt_int(t) for t in _totals],
+            textposition="outside",
+        ))
+        fig_bar.update_layout(
+            barmode="stack",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            margin=dict(t=40, b=20, r=80),
+            height=480,
+        )
+        st.plotly_chart(fig_bar, use_container_width=True, config=_plot_config)
+        st.caption("Gestapelte Balken: Moabit West (blau) + Moabit Ost (rot). Beschriftung = Gesamtwert.")
+
+with tab_about:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Über Moabit")
+        st.markdown("""
+Moabit ist ein dichtbevölkerter Ortsteil im Bezirk Mitte, unmittelbar nördlich des Tiergartens gelegen. Der Ortsteil wird vollständig von vier Wasserstraßen umschlossen: Spree, Berlin-Spandauer Schifffahrtskanal, Westhafenkanal und Charlottenburger Verbindungskanal. Diese Insellage verleiht Moabit einen unverwechselbaren Charakter, über 26 Straßen-, Bahn- und Fußgängerbrücken mit der übrigen Stadt verbunden.
+""")
+
+        st.subheader("Bevölkerung & Charakter")
+        st.markdown("""
+Moabit ist eines der am dichtesten besiedelten und multikulturellsten Viertel Berlins. Rund **40 %** der Einwohner haben einen Migrationshintergrund: türkische, arabische und osteuropäische Gemeinschaften sind besonders präsent. Verglichen mit aufgewerteten Nachbarvierteln wie Mitte oder Prenzlauer Berg ist Moabit **authentischer und weniger gentrifiziert**; die Mieten sind bisher verhältnismäßig moderat geblieben, steigen aber.
+
+*Daten zur Bevölkerungsstruktur sind im Tab „Bevölkerung" zu finden.*
+""")
+
+
+        st.subheader("Lage & Verkehr")
+        st.markdown("""
+Der **Berlin Hauptbahnhof** (der wichtigste Eisenbahnknotenpunkt Deutschlands) liegt am östlichen Rand Moabits und bietet hervorragende Anbindung an S-Bahn, U-Bahn, Tram und Fernzüge. Das Regierungsviertel grenzt unmittelbar an, ebenso wie Tiergarten und Charlottenburg.
+
+- **U-Bahn:** U9 (Turmstraße, Birkenstraße)
+- **S-Bahn / Fernbahn:** Berlin Hbf, Bellevue
+- **Tram:** M10 (Verbindung nach Prenzlauer Berg)
+- **Fahrrad:** Gut ausgebautes Radwegenetz entlang der Kanäle
+
+Das **Bundesministerium des Innern** hat seinen Berliner Dienstsitz in Moabit.
+""")
+
+
+    with col2:
+        st.subheader("Geschichte")
+        st.markdown("""
+Im 13. Jahrhundert hieß das Gebiet noch *Große Stadtheide*, später *Kämmereiheide*. Die eigentliche Besiedlung begann **1685**, als Hugenotten (französische Glaubensflüchtlinge) hier angesiedelt wurden. Sie nannten ihre neue Heimat *terre de Moab*, nach dem biblischen Land Moab, der ersten Zufluchtsstätte der Israeliten nach dem Auszug aus Ägypten. 1716 entstand die Kolonie Moabit; 1801 zählte man erst 120 Bewohner.
+
+1818 entstand nördlich davon eine weitere Kolonie, die zur Unterscheidung den Namen **Neu-Moabit** erhielt. Mit der Industrialisierung folgte eine rasche Besiedlung beider Kolonien. **1861** wurden bei der Eingemeindung nach Berlin 6 534 Einwohner gezählt; bis 1910 war die Bevölkerung auf rund 190 000 angewachsen.
+
+Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassische Arbeiterviertel. Von **1920 bis 2000** gehörte Moabit zum Bezirk Tiergarten; seit der Bezirksfusion am 1.  Januar 2001 ist es Ortsteil des neuen Bezirks Mitte.
+""")
+
+        _pop_data = {1801: 120, 1840: 986, 1860: 8200, 1871: 14818, 1880: 29693, 1910: 190000}
+        _fig_pop = go.Figure(go.Scatter(
+            x=list(_pop_data.keys()),
+            y=list(_pop_data.values()),
+            mode="lines+markers",
+            line=dict(color="#1E88E5", width=2),
+            marker=dict(size=7),
+            hovertemplate="%{x}: %{y:,.0f}<extra></extra>",
+        ))
+        _fig_pop.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(tickvals=[1801, 1840, 1860, 1871, 1880, 1910], tickformat="d", showgrid=False, tickangle=45),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", tickformat=","),
+            margin=dict(t=10, b=10, l=10, r=10),
+            height=280,
+        )
+        st.plotly_chart(_fig_pop, use_container_width=True, config=_plot_config)
+        st.caption("Bevölkerungswachstum Moabits 1801–1910. Quellen: Volkszählungen, Berliner Morgenpost (2012).")
+
+    st.subheader("Kieze im Überblick")
+    st.markdown("""
+Moabit hat keine festen amtlichen Kiezgrenzen; die Grenzen sind fließend. Historisch und städtebaulich werden jedoch sechs bis sieben Hauptkieze unterschieden:
+""")
+
+    _kc1, _kc2, _kc3 = st.columns(3)
+    _ks = 'min-height:160px; padding-bottom:0.5rem'
+    with _kc1:
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Alt-Moabit & Turmstraße</strong><br>Die zentralen Lebensadern Moabits. Rund um das Schultheiss Quartier und den Kleinen Tiergarten konzentrieren sich Handel, Gastronomie und öffentliches Leben.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Huttenkiez</strong><br>Mischung aus Wohnen und Industrie entlang der Huttenstraße (auch als ‘Hutteninsel’ bekannt). Rauher Charme, aber zunehmend im Wandel.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Westfälisches Viertel</strong><br>Ruhiges, bürgerlich geprägtes Gründerzeitviertel im Südwesten. Breite Straßen, gepflegte Altbauten und eine entspannte Wohnatmosphäre.</div>", unsafe_allow_html=True)
+    with _kc2:
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Beusselkiez</strong><br>Traditionelles Arbeiter- und Wohnviertel im Nordwesten, geprägt von gründerzeitlicher Blockbebauung und einer starken Nachbarschaftsidentität.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Lehrter-Straßen-Kiez</strong><br>Östliches Quartier zwischen Hauptbahnhof und Invalidenstraße, das sich in den vergangenen Jahren stark entwickelt hat.</div>", unsafe_allow_html=True)
+    with _kc3:
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Europacity</strong><br>Moderne Erweiterung im östlichen Moabit, direkt am Hauptbahnhof. Bürobauten, Neubauwohnungen und Gewerbeflächen prägen dieses noch im Entstehen begriffene Stadtquartier.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Stephankiez</strong><br>Einer der bekanntesten und besterhaltenen Gründerzeitkieze Berlins, rund um den Stephanplatz. Stuckfassaden, ruhige Straßen und eine entspannte, fast dörfliche Atmosphäre.</div>", unsafe_allow_html=True)
+
+    st.markdown("""
+Darüber hinaus ist Moabit durch das Quartiersmanagement Berlin in zwei offizielle Fördergebiete eingeteilt: **Moabit-Ost** und **Beusselstraße/Moabit-West**. Diese Gebiete erhalten gezielte Förderung für soziale Infrastruktur, Nachbarschaftsprojekte und städtebauliche Entwicklung.
+""")
+
+    st.subheader("Orte, Essen & Kultur")
+    st.markdown("""
+- **Justizvollzugsanstalt Moabit** und das **Kriminalgericht Moabit**: das größte Kriminalgericht Europas
+- **Arminiusmarkthalle** (1891): historische Markthalle mit regionalem und internationalem Angebot; dazu Wochenmarkt Turmstraße (Di & Fr)
+- **Kleiner Tiergarten**: zentraler Stadtpark und soziales Zentrum rund um Alt-Moabit und Turmstraße, auch bekannt als sozialer Brennpunkt
+- **Fritz-Schloß-Park**: die größte Grünfläche Moabits, entstanden auf einem ehemaligen Exerzierplatz
+- **Spreebogenpark**: mit direktem Blick auf den Reichstag; Kanalpromenaden entlang aller vier Wasserstraßen
+- **Restaurants:** von türkischen Imbissen bis zur gehobenen Gastronomie
+- **Kultur:** Kunsthaus Moabit, freie Theater und Galerien
+- **Sport:** Schwimmbad Turmstraße, Sporthallen und Bolzplätze
+""")
+
+    st.divider()
+    st.subheader("Quellen")
+    st.markdown("""
+- Bezirksamt Mitte: [Ortsteil Moabit](https://www.berlin.de/ba-mitte/ueber-den-bezirk/ortsteile/moabit/)
+- Amt für Statistik Berlin-Brandenburg: Volkszählungen und Einwohnerregister
+- Wikipedia: [Moabit](https://de.wikipedia.org/wiki/Moabit)
+- OpenStreetMap: Geodaten Moabit
+- Quartiersmanagement Berlin: [Moabit-Ost](https://www.qm-moabit-ost.de/) und [Beusselstraße/Moabit-West](https://www.stattbau.de/projekte/qm-beusselstrasse/)
+- [Moabit Online](https://moabitonline.de/moabit) — lokales Nachrichtenportal
+- [Moazin](https://www.moazin.de/) — Magazin für und über Moabit
+- [Gebietsinformation Turmstraße](https://www.turmstrasse.de/gebiete/gebietsinformation) — Quartiersmanagement Turmstraße
+- Berliner Morgenpost, 2. November 2012: „Kiez im Wandel und Aufbruch“ (Anzeigensonderveröffentlichung)
+""")
