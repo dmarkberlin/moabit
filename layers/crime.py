@@ -1,9 +1,17 @@
 import os
+import json
 import pandas as pd
 
 _DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 _FILE_OLD = os.path.join(_DATA_DIR, "Fallzahlen&HZ 2015-2024.xlsx")
 _FILE_NEW = os.path.join(_DATA_DIR, "Fallzahlen&HZ 2016-2025.xlsx")
+
+# Pre-computed JSON caches (committed for deployment; the source .xlsx are not).
+# Regenerate locally with precompute() whenever the source data changes.
+_CACHE_CRIME   = os.path.join(_DATA_DIR, "crime_moabit.json")
+_CACHE_BY_AREA = os.path.join(_DATA_DIR, "crime_by_area.json")
+_CACHE_BEZIRK  = os.path.join(_DATA_DIR, "crime_bezirk.json")
+_CACHE_LOR     = os.path.join(_DATA_DIR, "crime_mitte_lor.json")
 
 CATEGORIES = {
     "Straftaten insgesamt":          2,
@@ -57,19 +65,6 @@ def _parse_year_by_area(xl, year):
     return result
 
 
-def fetch_crime_data():
-    """Return DataFrame with combined Moabit West+Ost Fallzahlen, 2015-2025."""
-    xl_old = pd.ExcelFile(_FILE_OLD)
-    xl_new = pd.ExcelFile(_FILE_NEW)
-
-    rows = [_parse_year(xl_old, 2015)]
-    for year in range(2016, 2026):
-        rows.append(_parse_year(xl_new, year))
-
-    df = pd.DataFrame(rows).set_index("year")
-    return df
-
-
 def _parse_bezirk_year(xl, year):
     """Return (fallzahlen_df, hz_df) for all 12 Bezirke for a given year."""
     col = 2  # Straftaten insgesamt
@@ -83,19 +78,9 @@ def _parse_bezirk_year(xl, year):
     bezirke_h = df_h[df_h[0].astype(str).str.endswith("0000")][[1, col]].copy()
     bezirke_h.columns = ["Bezirk", "HZ"]
     bezirke_h["year"] = year
+    bezirke_h["HZ"] = pd.to_numeric(bezirke_h["HZ"], errors="coerce")
 
     return bezirke_f.reset_index(drop=True), bezirke_h.reset_index(drop=True)
-
-
-def fetch_crime_data_by_area():
-    """Return dict {year: {'Moabit West': {cat: val}, 'Moabit Ost': {cat: val}}} for 2015-2025."""
-    xl_old = pd.ExcelFile(_FILE_OLD)
-    xl_new = pd.ExcelFile(_FILE_NEW)
-
-    data = {2015: _parse_year_by_area(xl_old, 2015)}
-    for year in range(2016, 2026):
-        data[year] = _parse_year_by_area(xl_new, year)
-    return data
 
 
 _MITTE_EXCLUDE = {"010000", "019900"}
@@ -125,8 +110,50 @@ def _parse_mitte_lor_year(xl, year):
     return mitte_f.reset_index(drop=True), mitte_h.reset_index(drop=True)
 
 
-def fetch_mitte_lor_data():
-    """Return (fallzahlen_df, hz_df) for all LOR areas in Mitte, 2015-2025.
+# --- Computation from source .xlsx (used by precompute and as a local fallback) ---
+
+def _compute_crime_data():
+    """DataFrame with combined Moabit West+Ost Fallzahlen, 2015-2025 (year index)."""
+    xl_old = pd.ExcelFile(_FILE_OLD)
+    xl_new = pd.ExcelFile(_FILE_NEW)
+
+    rows = [_parse_year(xl_old, 2015)]
+    for year in range(2016, 2026):
+        rows.append(_parse_year(xl_new, year))
+
+    return pd.DataFrame(rows).set_index("year")
+
+
+def _compute_crime_data_by_area():
+    """dict {year: {'Moabit West': {cat: val}, 'Moabit Ost': {cat: val}}} for 2015-2025."""
+    xl_old = pd.ExcelFile(_FILE_OLD)
+    xl_new = pd.ExcelFile(_FILE_NEW)
+
+    data = {2015: _parse_year_by_area(xl_old, 2015)}
+    for year in range(2016, 2026):
+        data[year] = _parse_year_by_area(xl_new, year)
+    return data
+
+
+def _compute_bezirk_comparison():
+    """(fallzahlen_df, hz_df) for all 12 Bezirke, 2015-2025."""
+    xl_old = pd.ExcelFile(_FILE_OLD)
+    xl_new = pd.ExcelFile(_FILE_NEW)
+
+    f_rows, h_rows = [], []
+    f_y, h_y = _parse_bezirk_year(xl_old, 2015)
+    f_rows.append(f_y)
+    h_rows.append(h_y)
+    for year in range(2016, 2026):
+        f_y, h_y = _parse_bezirk_year(xl_new, year)
+        f_rows.append(f_y)
+        h_rows.append(h_y)
+
+    return pd.concat(f_rows, ignore_index=True), pd.concat(h_rows, ignore_index=True)
+
+
+def _compute_mitte_lor_data():
+    """(fallzahlen_df, hz_df) for all LOR areas in Mitte, 2015-2025.
 
     fallzahlen_df also contains a synthetic 'Moabit (gesamt)' row = West + Ost.
     """
@@ -154,18 +181,63 @@ def fetch_mitte_lor_data():
     return fz_df, hz_df
 
 
+# --- Public accessors: read committed JSON cache, fall back to .xlsx locally ---
+
+def fetch_crime_data():
+    if os.path.exists(_CACHE_CRIME):
+        return pd.read_json(_CACHE_CRIME, orient="records").set_index("year")
+    return _compute_crime_data()
+
+
+def fetch_crime_data_by_area():
+    if os.path.exists(_CACHE_BY_AREA):
+        with open(_CACHE_BY_AREA, encoding="utf-8") as f:
+            raw = json.load(f)
+        return {int(year): areas for year, areas in raw.items()}
+    return _compute_crime_data_by_area()
+
+
 def fetch_bezirk_comparison():
-    """Return (fallzahlen_df, hz_df) for all 12 Bezirke, 2015-2025."""
-    xl_old = pd.ExcelFile(_FILE_OLD)
-    xl_new = pd.ExcelFile(_FILE_NEW)
+    if os.path.exists(_CACHE_BEZIRK):
+        with open(_CACHE_BEZIRK, encoding="utf-8") as f:
+            raw = json.load(f)
+        return pd.DataFrame(raw["fallzahlen"]), pd.DataFrame(raw["hz"])
+    return _compute_bezirk_comparison()
 
-    f_rows, h_rows = [], []
-    f_y, h_y = _parse_bezirk_year(xl_old, 2015)
-    f_rows.append(f_y)
-    h_rows.append(h_y)
-    for year in range(2016, 2026):
-        f_y, h_y = _parse_bezirk_year(xl_new, year)
-        f_rows.append(f_y)
-        h_rows.append(h_y)
 
-    return pd.concat(f_rows, ignore_index=True), pd.concat(h_rows, ignore_index=True)
+def fetch_mitte_lor_data():
+    if os.path.exists(_CACHE_LOR):
+        with open(_CACHE_LOR, encoding="utf-8") as f:
+            raw = json.load(f)
+        return pd.DataFrame(raw["fallzahlen"]), pd.DataFrame(raw["hz"])
+    return _compute_mitte_lor_data()
+
+
+def precompute():
+    """Run locally to generate JSON caches for deployment (requires the .xlsx)."""
+    _compute_crime_data().reset_index().to_json(
+        _CACHE_CRIME, orient="records", indent=2, force_ascii=False
+    )
+
+    with open(_CACHE_BY_AREA, "w", encoding="utf-8") as f:
+        json.dump(_compute_crime_data_by_area(), f, ensure_ascii=False, indent=2)
+
+    bz_fall, bz_hz = _compute_bezirk_comparison()
+    with open(_CACHE_BEZIRK, "w", encoding="utf-8") as f:
+        json.dump(
+            {"fallzahlen": bz_fall.to_dict("records"), "hz": bz_hz.to_dict("records")},
+            f, ensure_ascii=False, indent=2,
+        )
+
+    lor_fall, lor_hz = _compute_mitte_lor_data()
+    with open(_CACHE_LOR, "w", encoding="utf-8") as f:
+        json.dump(
+            {"fallzahlen": lor_fall.to_dict("records"), "hz": lor_hz.to_dict("records")},
+            f, ensure_ascii=False, indent=2,
+        )
+
+    print("Precomputed crime JSON caches written to", _DATA_DIR)
+
+
+if __name__ == "__main__":
+    precompute()

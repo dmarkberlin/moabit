@@ -37,7 +37,7 @@ st.markdown("""
 <style>
 .block-container { padding-top: 1rem !important; }
 h1 { font-weight: 400 !important; letter-spacing: 0.04em; }
-[role="tab"], [role="tab"] p, [role="tab"] div { font-size: 1.2rem !important; }
+[role="tab"], [role="tab"] p, [role="tab"] div { font-size: 1.10rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,6 +169,25 @@ def _fmt_pct(p) -> str:
 
 def _fmt_float(v, decimals=1) -> str:
     return f"{v:.{decimals}f}".replace(".", ",")
+
+# Single source of truth for the 12 Berlin Bezirke colours, shared by the rent
+# chart (Bevölkerung tab) and the crime charts so a Bezirk is never two colours.
+BEZIRK_COLOURS = {
+    "Charlottenburg-Wilmersdorf": "#1E88E5",
+    "Friedrichshain-Kreuzberg":   "#43A047",
+    "Lichtenberg":                "#8E24AA",
+    "Marzahn-Hellersdorf":        "#00ACC1",
+    "Mitte":                      "#C0504D",
+    "Neukölln":                   "#FB8C00",
+    "Pankow":                     "#6D4C41",
+    "Reinickendorf":              "#546E7A",
+    "Spandau":                    "#F4511E",
+    "Steglitz-Zehlendorf":        "#039BE5",
+    "Tempelhof-Schöneberg":       "#7CB342",
+    "Treptow-Köpenick":           "#FFB300",
+}
+# Berlin-wide median is not a Bezirk; rendered as a neutral reference line.
+BERLIN_MEDIAN_COLOUR = "#9E9E9E"
 
 def _metrics_2col(items):
     cells = ""
@@ -695,7 +714,7 @@ with tab_demographics:
         fig_age = go.Figure(go.Bar(
             x=list(age_data.keys()),
             y=list(age_data.values()),
-            marker_color="#2E6B8A",
+            marker_color="#1E88E5",
             text=[_fmt_int(v) for v in age_data.values()],
             textposition="outside",
         ))
@@ -720,8 +739,8 @@ with tab_demographics:
             fig_pop = go.Figure(go.Scatter(
                 x=trend["year"], y=trend["total"],
                 mode="lines+markers+text",
-                line=dict(color="#2E6B8A", width=2.5),
-                marker=dict(size=8, color="#2E6B8A"),
+                line=dict(color="#1E88E5", width=2.5),
+                marker=dict(size=8, color="#1E88E5"),
                 text=[_fmt_int(v) for v in trend["total"]],
                 textposition="top center",
                 textfont=dict(size=11),
@@ -737,8 +756,8 @@ with tab_demographics:
             )
             st.plotly_chart(fig_pop, use_container_width=True, config=_plot_config)
             st.caption(
-                f"{direction} um {_fmt_pct(abs(pct))} zwischen 2021 ({_fmt_int(first)} Einwohner) "
-                f"und 2025 ({_fmt_int(last)} Einwohner). "
+                f"{direction} um {_fmt_pct(abs(pct))} zwischen {_yr0} ({_fmt_int(first)} Einwohner) "
+                f"und {_yr1} ({_fmt_int(last)} Einwohner). "
                 "Die Zeitreihe beginnt 2021, da Berlins LOR-Planungsraumbezirke am 1. Januar 2021 "
                 "neu strukturiert wurden und ältere Daten für Moabits Planungsräume nicht vergleichbar sind."
             )
@@ -752,14 +771,14 @@ with tab_demographics:
         with col_stack:
             st.subheader("Altersstruktur im Zeitverlauf")
             age_cols = {
-                "unter 6":  ("u6",     "#C89030", 8),
-                "6–14":     ("6_15",   "#6B8E23", 7),
-                "15–17":    ("15_18",  "#2F6B4F", 6),
-                "18–26":    ("18_27",  "#2E6B8A", 5),
-                "27–44":    ("27_45",  "#3B4D8A", 4),
-                "45–54":    ("45_55",  "#6A3D8A", 3),
-                "55–64":    ("55_65",  "#8A3D6A", 2),
-                "65+":      ("65plus", "#7A3030", 1),
+                "unter 6":  ("u6",     "#FFB300", 8),
+                "6–14":     ("6_15",   "#7CB342", 7),
+                "15–17":    ("15_18",  "#43A047", 6),
+                "18–26":    ("18_27",  "#1E88E5", 5),
+                "27–44":    ("27_45",  "#636EFA", 4),
+                "45–54":    ("45_55",  "#8E24AA", 3),
+                "55–64":    ("55_65",  "#FF6692", 2),
+                "65+":      ("65plus", "#C0504D", 1),
             }
             fig_stack = go.Figure()
             for label, (col, color, rank) in age_cols.items():
@@ -790,13 +809,13 @@ with tab_demographics:
             mig_trend = get_migration_over_time()
             fig_ratios = go.Figure()
             ratio_series = {
-                "Mit Migrationshintergrund":    (mig_trend,  "with_mig_bg_pct",  "#7A3030"),
-                "Ausländer/innen":              (mig_trend,  "foreign_pct",       "#C06040"),
-                "Deutsche mit MH":              (mig_trend,  "german_mig_pct",    "#A07060"),
-                "Deutsche ohne MH":             (mig_trend,  "german_no_mig_pct", "#2F6B4F"),
-                "18- bis 44-Jährige":           (trend,      "young_adult_pct",   "#2E6B8A"),
-                "unter 18":                     (trend,      "u18_pct",           "#C89030"),
-                "55 und älter":                 (trend,      "senior_pct",        "#78909C"),
+                "Mit Migrationshintergrund":    (mig_trend,  "with_mig_bg_pct",  "#C0504D"),
+                "Ausländer/innen":              (mig_trend,  "foreign_pct",       "#FB8C00"),
+                "Deutsche mit MH":              (mig_trend,  "german_mig_pct",    "#6D4C41"),
+                "Deutsche ohne MH":             (mig_trend,  "german_no_mig_pct", "#43A047"),
+                "18- bis 44-Jährige":           (trend,      "young_adult_pct",   "#1E88E5"),
+                "unter 18":                     (trend,      "u18_pct",           "#FFB300"),
+                "55 und älter":                 (trend,      "senior_pct",        "#546E7A"),
             }
             for label, (df, col, color) in ratio_series.items():
                 if df.empty or col not in df.columns:
@@ -884,7 +903,7 @@ with tab_demographics:
             top_cols = sorted(nat_cols, key=lambda c: latest.get(c, 0), reverse=True)[:8]
 
             fig_trend = go.Figure()
-            for col in top_cols:
+            for col in sorted(top_cols):
                 colour = COUNTRY_COLOURS.get(col, "#CCCCCC")
                 fig_trend.add_trace(go.Scatter(
                     x=nat_trend["year"],
@@ -942,25 +961,8 @@ with tab_demographics:
     ibb_years = IBB_DATA["year"]
     bezirke = [k for k in IBB_DATA if k != "year"]
 
-    # Highlight Mitte and Berlin median, mute the rest
-    BEZIRK_COLOURS = {
-        "Mitte":                      "#7A3030",
-        "Berlin (median)":            "#9E9E9E",
-        "Friedrichshain-Kreuzberg":   "#2E6B8A",
-        "Pankow":                     "#2F6B4F",
-        "Charlottenburg-Wilmersdorf": "#B8860B",
-        "Spandau":                    "#6A3D8A",
-        "Steglitz-Zehlendorf":        "#6B8E23",
-        "Tempelhof-Schöneberg":       "#A07060",
-        "Neukölln":                   "#3B4D8A",
-        "Treptow-Köpenick":           "#308070",
-        "Marzahn-Hellersdorf":        "#604090",
-        "Lichtenberg":                "#8A3D6A",
-        "Reinickendorf":              "#708050",
-    }
-
     fig_rent = go.Figure()
-    for bezirk in bezirke:
+    for bezirk in sorted(bezirke):
         is_key = bezirk == "Mitte"
         is_berlin = bezirk == "Berlin (median)"
         fig_rent.add_trace(go.Scatter(
@@ -969,7 +971,7 @@ with tab_demographics:
             mode="lines+markers",
             name=bezirk,
             line=dict(
-                color=BEZIRK_COLOURS.get(bezirk, "#888888"),
+                color=BEZIRK_COLOURS.get(bezirk, BERLIN_MEDIAN_COLOUR),
                 width=3 if is_key else 1 if is_berlin else 1.5,
                 dash="dash" if is_berlin else "solid",
             ),
@@ -991,7 +993,7 @@ with tab_demographics:
     )
     st.plotly_chart(fig_rent, use_container_width=True, config=_plot_config)
     st.caption(
-        "Moabit gehört zum Bezirk Mitte (dunkelrote Linie) – keine moabitspezifischen Mietdaten verfügbar. "
+        "Moabit gehört zum Bezirk Mitte (rote Linie) – keine moabitspezifischen Mietdaten verfügbar. "
         "Berliner Median als gestrichelte graue Linie. "
         "Frühe Datenpunkte verwenden überlappende Berichtszeiträume (z. B. 2008/09 → 2009); "
         "keine Daten für 2011 und 2014. "
@@ -1118,7 +1120,7 @@ with tab_umwelt:
         st.subheader("Luftqualität im Jahresverlauf (Tagesmittelwerte)")
         fig_aq = go.Figure()
         colour_map = {"NO₂": "#C0504D", "PM₁₀": "#FB8C00", "PM₂,₅": "#8E24AA", "O₃": "#1E88E5"}
-        for col in [c for c in aq_history.columns if c != "date"]:
+        for col in sorted(c for c in aq_history.columns if c != "date"):
             fig_aq.add_trace(go.Scatter(
                 x=aq_history["date"],
                 y=aq_history[col],
@@ -1200,7 +1202,7 @@ with tab_umwelt:
             st.subheader("Pegelverteilung: Tag vs. Nacht")
             colours = {"Tag": "#C0504D", "Nacht": "#1E88E5"}
             fig_dist = go.Figure()
-            for col_name in ["Tag", "Nacht"]:
+            for col_name in ["Nacht", "Tag"]:
                 fig_dist.add_trace(go.Bar(
                     name=col_name,
                     x=DB_BANDS,
@@ -1256,20 +1258,6 @@ with tab_umwelt:
 
 # --- Kriminalität tab ---
 with tab_crime:
-    _BZ_COLOURS = {
-        "Charlottenburg-Wilmersdorf": "#1E88E5",
-        "Friedrichshain-Kreuzberg":   "#43A047",
-        "Lichtenberg":                "#8E24AA",
-        "Marzahn-Hellersdorf":        "#00ACC1",
-        "Mitte":                      "#C0504D",
-        "Neukölln":                     "#FB8C00",
-        "Pankow":                     "#6D4C41",
-        "Reinickendorf":              "#546E7A",
-        "Spandau":                    "#F4511E",
-        "Steglitz-Zehlendorf":        "#039BE5",
-        "Tempelhof-Schöneberg":       "#7CB342",
-        "Treptow-Köpenick":           "#FFB300",
-    }
     _LOR_COLOURS = {
         "Alexanderplatz":       "#8E24AA",
         "Brunnenstraße Nord":   "#00ACC1",
@@ -1389,7 +1377,7 @@ with tab_crime:
                 _bz_x = _bz_data["Fallzahlen"]
                 _bz_text = _bz_data["Fallzahlen"].apply(_fmt_int)
                 _bz_title = "Fallzahlen"
-            _bz_colours = [_BZ_COLOURS.get(b, "#888") for b in _bz_data["Bezirk"]]
+            _bz_colours = [BEZIRK_COLOURS.get(b, "#888") for b in _bz_data["Bezirk"]]
             fig_bz = go.Figure(go.Bar(
                 x=_bz_x,
                 y=_bz_data["Bezirk"],
@@ -1428,7 +1416,7 @@ with tab_crime:
                 y=_btr_pivot[_bez].tolist(),
                 name=_bez,
                 mode="lines+markers",
-                line=dict(width=2.5 if _is_mitte else 1.5, color=_BZ_COLOURS.get(_bez, "#888")),
+                line=dict(width=2.5 if _is_mitte else 1.5, color=BEZIRK_COLOURS.get(_bez, "#888")),
                 marker=dict(size=5 if _is_mitte else 4),
             ))
         _fig_btr.update_layout(
@@ -1577,10 +1565,12 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
         fig_bar.add_trace(go.Bar(
             x=_vals_west, y=_sorted_cats, orientation="h",
             name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
+            legendrank=2,
         ))
         fig_bar.add_trace(go.Bar(
             x=_vals_ost, y=_sorted_cats, orientation="h",
             name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
+            legendrank=1,
             text=[_fmt_int(t) for t in _totals],
             textposition="outside",
         ))

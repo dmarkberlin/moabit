@@ -1,0 +1,1161 @@
+{
+  "fallzahlen": [
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5475,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 10313,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 23524,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 4583,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 7428,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 14091,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 8017,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 7358,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 7093,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 10164,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5021,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 11488,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 22803,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 4799,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 9335,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 19267,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 7947,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 7732,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 7230,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 10384,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5267,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 13220,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 20868,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 4627,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 7999,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 10525,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6721,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6828,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6573,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 9546,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5139,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 9085,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 19246,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 4209,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 7278,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 9397,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6087,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6418,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6217,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 8263,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 4575,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 7392,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 21462,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 4131,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 6989,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 9268,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 5874,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6393,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6098,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 7856,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 4053,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 6948,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 19287,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3890,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 6326,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 9328,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6119,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6575,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6007,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 7818,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 3838,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 5956,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 15765,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3400,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 6032,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 9554,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 5591,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6204,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 5490,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 7655,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 4113,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 6251,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 18999,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3759,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 6192,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 9871,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6203,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 7543,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6608,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 8553,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 4491,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 6550,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 19673,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3724,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 6344,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 10424,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6510,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6822,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6937,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 9431,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5368,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 7099,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 20197,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3703,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 5881,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 10677,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6298,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6915,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6279,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 8976,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "Fallzahlen": 5198,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "Fallzahlen": 6326,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "Fallzahlen": 17972,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "Fallzahlen": 3430,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Moabit West",
+      "Fallzahlen": 5898,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "Fallzahlen": 10028,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "Fallzahlen": 6137,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "Fallzahlen": 6278,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "Fallzahlen": 6419,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "Fallzahlen": 8960,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 21519,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 28602,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 18524,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 16675,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 16257,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 15654,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 15586,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 16063,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 16768,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 16558,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Moabit (gesamt)",
+      "Fallzahlen": 15926,
+      "year": 2025
+    }
+  ],
+  "hz": [
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 38575.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 102068.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 45938.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 16175.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 16612.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 38491.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 21157.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 20049.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 16095.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 18140.0,
+      "year": 2015
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 34494.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 106538.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 42937.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 16425.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 20624.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 51726.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 20660.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 20759.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 16082.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 18390.0,
+      "year": 2016
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 36009.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 114281.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 37791.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 15285.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 17453.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 27927.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 17321.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 18135.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 14358.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 16679.0,
+      "year": 2017
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 34973.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 74768.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 33980.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 13477.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 15754.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 24459.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 15592.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 16754.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 13464.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 14285.0,
+      "year": 2018
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 30725.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 58732.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 37331.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 13025.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 15090.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 23451.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 15070.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 16320.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 13158.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 13645.0,
+      "year": 2019
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 26982.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 54648.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 33163.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 12339.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 13757.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 22983.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 15924.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 16696.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 13055.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 13780.0,
+      "year": 2020
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 25325.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 46049.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 26687.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 10867.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 13223.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 22959.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 14759.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 15793.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 12099.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 13683.0,
+      "year": 2021
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 25890.721389903058,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 45667.7381648159,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 31272.015011357278,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 11762.681102731794,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 13381.742738589212,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 23149.08186956216,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 16230.147308930113,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 18810.473815461348,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 14384.918475303131,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 15171.080405129751,
+      "year": 2022
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 27470.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 47982.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 32060.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 11365.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 13450.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 24186.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 16755.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 16856.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 14917.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 16531.0,
+      "year": 2023
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 32658.027620612032,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 51885.689226721246,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 32775.632079452145,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 11369.009241349668,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 12523.690879277667,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 24769.748289061594,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 16184.822552874359,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 17143.49464498215,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 13525.91443712033,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 15723.369593777918,
+      "year": 2024
+    },
+    {
+      "Gebiet": "Tiergarten Süd",
+      "HZ": 31960.15740285293,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Regierungsviertel",
+      "HZ": 46178.55317906416,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Alexanderplatz",
+      "HZ": 28817.445682674577,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Brunnenstraße Süd",
+      "HZ": 10507.93456283316,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Moabit West",
+      "HZ": 12610.91748807971,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Moabit Ost",
+      "HZ": 22923.76271573894,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Osloer Straße",
+      "HZ": 15842.734336680693,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Brunnenstraße Nord",
+      "HZ": 15639.479846544767,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Parkviertel",
+      "HZ": 13791.547601143027,
+      "year": 2025
+    },
+    {
+      "Gebiet": "Wedding Zentrum",
+      "HZ": 15859.529878221467,
+      "year": 2025
+    }
+  ]
+}
