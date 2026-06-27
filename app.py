@@ -37,6 +37,7 @@ st.markdown("""
 <style>
 .block-container { padding-top: 1rem !important; }
 h1 { font-weight: 400 !important; letter-spacing: 0.04em; }
+[role="tab"], [role="tab"] p, [role="tab"] div { font-size: 1.2rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
