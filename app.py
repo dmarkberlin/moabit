@@ -15,17 +15,18 @@ from streamlit_folium import st_folium
 import plotly.graph_objects as go
 from layers.transport import fetch_stops, stop_style
 from layers.cycling import fetch_cycle_lanes, lane_style, LEGEND as CYCLE_LEGEND
-from layers.rent import fetch_wohnlagen, WOL_STYLE
+from layers.wohnlagen import fetch_wohnlagen, WOL_STYLE
+from layers.rent import YEARS as IBB_YEARS, ASKING_RENTS, BERLIN_MEDIAN_KEY
 from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
-from layers.routes import fetch_routes, fetch_routes_full, LEGEND as ROUTE_LEGEND
+from layers.routes import fetch_routes, fetch_routes_full, ROUTE_STYLE, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
 from layers.noise import fetch_noise_data, THRESHOLDS, DB_BANDS
 from layers.crime import fetch_crime_data, fetch_crime_data_by_area, fetch_bezirk_comparison, fetch_mitte_lor_data, CATEGORIES, DEFAULT_CATEGORIES
 from layers.airquality import (
     fetch_current, fetch_history,
     STATION_NAME, STATION_LAT, STATION_LON,
-    MOABIT_STATIONS, LIMITS, INDEX_LABELS,
+    MOABIT_STATIONS, LIMITS, INDEX_LABELS, COMPONENT_COLOURS,
 )
 from layers.demographics import (
     population_over_time, migration_over_time, nationality_over_time,
@@ -52,8 +53,12 @@ _plot_config = {"staticPlot": True} if _is_mobile else {}
 _title_size = "1.3rem" if _is_mobile else "1.8rem"
 st.markdown(f"<h1 style='font-size:{_title_size}; margin-bottom:0.25rem'>Moabiter Dashboard</h1>", unsafe_allow_html=True)
 
-with open("data/moabit_boundary.geojson", encoding="utf-8") as f:
-    boundary = json.load(f)
+@st.cache_data
+def _load_boundary():
+    with open("data/moabit_boundary.geojson", encoding="utf-8") as f:
+        return json.load(f)
+
+boundary = _load_boundary()
 
 @st.cache_data(ttl=3600)
 def get_stops():
@@ -218,13 +223,19 @@ _HAFAS_BODY = {
 def _hhmm_to_minutes(s):
     return int(s[:2]) * 60 + int(s[2:4])
 
-@st.cache_data(ttl=60)
-def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
+def _station_board(stop_id, results, mode, dir_label, time_label):
+    """Fetch a HAFAS station board.
+
+    `mode` is "ARR" or "DEP"; the response uses a matching a*/d* field prefix.
+    `dir_label` / `time_label` name the two columns that differ between the two
+    boards ("Herkunft"/"Ankunft" vs "Richtung"/"Abfahrt").
+    """
+    p = "a" if mode == "ARR" else "d"
     body = {
         **_HAFAS_BODY,
         "svcReqL": [{"meth": "StationBoard", "req": {
             "stbLoc": {"lid": f"A=1@L={stop_id}@", "type": "S"},
-            "type": "ARR",
+            "type": mode,
             "maxJny": results,
         }}],
     }
@@ -241,56 +252,10 @@ def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
         name     = prod.get("name") or "?"
         cat      = prod.get("prodCtx", {}).get("catOut", "").strip()
         stop     = j.get("stbStop", {})
-        t_plan   = stop.get("aTimeS", "")
-        t_real   = stop.get("aTimeR", t_plan)
-        platform = stop.get("aPltfR", stop.get("aPltfS", {})).get("txt", "—")
-        arr_str  = f"{t_plan[:2]}:{t_plan[2:4]}" if len(t_plan) >= 4 else "—"
-        if t_plan and t_real and t_real != t_plan and len(t_real) >= 4:
-            diff = _hhmm_to_minutes(t_real) - _hhmm_to_minutes(t_plan)
-            if diff < -720:
-                diff += 1440
-            delay_str = f"+{diff} min" if diff > 0 else ("pünktlich" if diff == 0 else f"{diff} min")
-        else:
-            delay_str = "pünktlich"
-        rows.append({
-            "Icon":       _TYPE_ICON.get(cat, ""),
-            "Linie":      name,
-            "Typ":        cat,
-            "Herkunft":   j.get("dirTxt") or "?",
-            "Gleis":      platform,
-            "Ankunft":    arr_str,
-            "Verspätung": delay_str,
-        })
-    return rows
-
-
-@st.cache_data(ttl=60)
-def fetch_departures(stop_id=HBF_STOP_ID, results=25):
-    body = {
-        **_HAFAS_BODY,
-        "svcReqL": [{"meth": "StationBoard", "req": {
-            "stbLoc": {"lid": f"A=1@L={stop_id}@", "type": "S"},
-            "type": "DEP",
-            "maxJny": results,
-        }}],
-    }
-    r = requests.post(_HAFAS_URL, json=body, timeout=10)
-    r.raise_for_status()
-    svc = r.json()["svcResL"][0]
-    if svc.get("err", "OK") != "OK" or "res" not in svc:
-        return []
-    res   = svc["res"]
-    prods = res["common"]["prodL"]
-    rows  = []
-    for j in res.get("jnyL", []):
-        prod     = prods[j.get("prodX", 0)]
-        name     = prod.get("name") or "?"
-        cat      = prod.get("prodCtx", {}).get("catOut", "").strip()
-        stop     = j.get("stbStop", {})
-        t_plan   = stop.get("dTimeS", "")
-        t_real   = stop.get("dTimeR", t_plan)
-        platform = stop.get("dPltfR", stop.get("dPltfS", {})).get("txt", "—")
-        dep_str  = f"{t_plan[:2]}:{t_plan[2:4]}" if len(t_plan) >= 4 else "—"
+        t_plan   = stop.get(f"{p}TimeS", "")
+        t_real   = stop.get(f"{p}TimeR", t_plan)
+        platform = stop.get(f"{p}PltfR", stop.get(f"{p}PltfS", {})).get("txt", "—")
+        time_str = f"{t_plan[:2]}:{t_plan[2:4]}" if len(t_plan) >= 4 else "—"
         if t_plan and t_real and t_real != t_plan and len(t_real) >= 4:
             diff = _hhmm_to_minutes(t_real) - _hhmm_to_minutes(t_plan)
             if diff < -720:
@@ -299,15 +264,25 @@ def fetch_departures(stop_id=HBF_STOP_ID, results=25):
         else:
             delay_str = "pünktlich"
         rows.append({
-            "Icon":        _TYPE_ICON.get(cat, ""),
-            "Linie":       name,
-            "Typ":         cat,
-            "Richtung":    j.get("dirTxt") or "?",
-            "Gleis":       platform,
-            "Abfahrt":     dep_str,
-            "Verspätung":  delay_str,
+            "Icon":       _TYPE_ICON.get(cat, ""),
+            "Linie":      name,
+            "Typ":        cat,
+            dir_label:    j.get("dirTxt") or "?",
+            "Gleis":      platform,
+            time_label:   time_str,
+            "Verspätung": delay_str,
         })
     return rows
+
+
+@st.cache_data(ttl=60)
+def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
+    return _station_board(stop_id, results, "ARR", "Herkunft", "Ankunft")
+
+
+@st.cache_data(ttl=60)
+def fetch_departures(stop_id=HBF_STOP_ID, results=25):
+    return _station_board(stop_id, results, "DEP", "Richtung", "Abfahrt")
 
 st.sidebar.title("Ebenen")
 show_routes = st.sidebar.checkbox("Verkehrslinien", value=True)
@@ -434,9 +409,9 @@ with tab_map:
     folium.GeoJson(
         boundary,
         style_function=lambda _: {
-            "color": "#1D9E75",
+            "color": "#43A047",
             "weight": 2.5,
-            "fillColor": "#1D9E75",
+            "fillColor": "#43A047",
             "fillOpacity": 0.08,
         }
     ).add_to(m)
@@ -446,7 +421,7 @@ with tab_map:
             {"type": "FeatureCollection", "features": greenspaces},
             style_function=lambda f: FEATURE_STYLE.get(
                 f["properties"].get("type", ""),
-                {"color": "#1D9E75", "fillColor": "#1D9E75", "fillOpacity": 0.3, "weight": 1}
+                {"color": "#43A047", "fillColor": "#43A047", "fillOpacity": 0.3, "weight": 1}
             ),
             tooltip=folium.GeoJsonTooltip(
                 fields=["name", "type"],
@@ -472,12 +447,18 @@ with tab_map:
             ).add_to(m)
 
     if show_routes:
+        # Resolve from ROUTE_STYLE rather than the "colour"/"weight"/"opacity"
+        # baked into routes.json, so the committed caches stay geometry and a
+        # palette change takes effect without regenerating them.
+        def _route_style(f):
+            return ROUTE_STYLE.get(f["properties"].get("route", "bus"), ROUTE_STYLE["bus"])
+
         folium.GeoJson(
             {"type": "FeatureCollection", "features": routes},
             style_function=lambda f: {
-                "color":   f["properties"]["colour"],
-                "weight":  f["properties"]["weight"],
-                "opacity": f["properties"]["opacity"],
+                "color":   _route_style(f)["colour"],
+                "weight":  _route_style(f)["weight"],
+                "opacity": _route_style(f)["opacity"],
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=["ref", "name"],
@@ -603,7 +584,9 @@ with tab_map:
         m,
         use_container_width=True,
         height=350 if _is_mobile else 500,
-        returned_objects=["last_object_clicked"],
+        # "center"/"zoom" must be requested explicitly, otherwise st_folium omits
+        # them and the pan/zoom restore below silently never fires.
+        returned_objects=["last_object_clicked", "center", "zoom"],
         key="moabit_map",
     )
 
@@ -707,25 +690,47 @@ with tab_demographics:
         age_data = {}
         title_year = "–"
 
-    col_age, col_pop = st.columns(2)
+    if _is_mobile:
+        col_age, col_pop = st.container(), st.container()
+    else:
+        col_age, col_pop = st.columns(2)
 
     with col_age:
         st.subheader(f"Bevölkerung nach Altersgruppe ({title_year})")
-        fig_age = go.Figure(go.Bar(
-            x=list(age_data.keys()),
-            y=list(age_data.values()),
-            marker_color="#1E88E5",
-            text=[_fmt_int(v) for v in age_data.values()],
-            textposition="outside",
-        ))
-        fig_age.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
-            xaxis_title="Altersgruppe",
-            yaxis_title="Bevölkerung",
-            margin=dict(t=20, b=20),
-        )
+        if _is_mobile:
+            fig_age = go.Figure(go.Bar(
+                x=list(age_data.keys()),
+                y=list(age_data.values()),
+                marker_color="#1E88E5",
+                text=[_fmt_int(v) for v in age_data.values()],
+                textposition="outside",
+            ))
+            fig_age.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+                xaxis_title="Altersgruppe",
+                yaxis_title="Bevölkerung",
+                margin=dict(t=20, b=20),
+                height=320,
+            )
+        else:
+            fig_age = go.Figure(go.Bar(
+                x=list(age_data.values()),
+                y=list(age_data.keys()),
+                orientation="h",
+                marker_color="#1E88E5",
+                text=[_fmt_int(v) for v in age_data.values()],
+                textposition="outside",
+            ))
+            fig_age.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+                xaxis_title="Bevölkerung",
+                yaxis_title="Altersgruppe",
+                margin=dict(t=20, b=20, r=60),
+            )
         st.plotly_chart(fig_age, use_container_width=True, config=_plot_config)
 
     _yr0, _yr1 = "–", "–"
@@ -765,7 +770,10 @@ with tab_demographics:
     if not trend.empty:
         st.divider()
 
-        col_stack, col_comp = st.columns(2)
+        if _is_mobile:
+            col_stack, col_comp = st.container(), st.container()
+        else:
+            col_stack, col_comp = st.columns(2)
 
         # --- Age structure shift (stacked bar) ---
         with col_stack:
@@ -872,7 +880,10 @@ with tab_demographics:
         # Sort alphabetically so colour assignment is stable across years
         sorted_nat = dict(sorted(nat_data.items()))
 
-        col_left, col_right = st.columns([1, 1])
+        if _is_mobile:
+            col_left, col_right = st.container(), st.container()
+        else:
+            col_left, col_right = st.columns([1, 1])
 
         # Donut for selected year
         with col_left:
@@ -939,35 +950,13 @@ with tab_demographics:
     st.divider()
     st.subheader("Angebotsmieten nach Bezirk 2008–2025 (€/m², netto kalt)")
 
-    # Mitte midpoint years for overlapping reporting periods:
-    # 2008/09 → 2009, 2009/10 → 2010, 2011/12 → 2012, 2012/13 → 2013, 2013/14 → 2014
-    IBB_DATA = {
-        "year": [2009, 2010, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
-        "Mitte":                      [5.37, 6.18, 8.03, 9.39, 9.36, 10.06, 10.51, 12.77, 12.51, 13.45, 13.70, 14.00, 15.46, 18.26, 19.91, 20.00],
-        "Friedrichshain-Kreuzberg":   [6.42, 7.00, 8.61, 9.64, 9.98, 10.99, 11.50, 12.50, 12.94, 13.01, 13.11, 13.52, 14.85, 18.33, 19.42, 19.40],
-        "Pankow":                     [6.13, 6.73, 8.00, 8.56, 8.99,  9.45,  9.99, 10.86, 10.97, 10.96, 10.50, 11.73, 12.50, 14.93, 17.00, 17.00],
-        "Charlottenburg-Wilmersdorf": [6.56, 7.53, 8.93, 9.86, 9.49, 10.00, 10.53, 11.86, 12.00, 12.63, 12.38, 13.29, 15.00, 17.20, 19.39, 19.17],
-        "Spandau":                    [5.26, 5.28, 5.93, 6.48, 6.58,  6.99,  7.35,  7.95,  8.59,  8.86,  8.53,  8.22,  8.67, 10.13, 12.00, 12.50],
-        "Steglitz-Zehlendorf":        [6.29, 6.88, 7.99, 8.50, 8.50,  8.87,  9.38, 10.00, 10.44, 10.70, 10.31, 11.03, 12.31, 13.33, 14.59, 15.00],
-        "Tempelhof-Schöneberg":       [5.84, 6.23, 7.49, 8.00, 8.01,  8.50,  9.00,  9.97, 10.30, 10.52,  9.97, 10.22, 11.31, 12.94, 14.67, 15.79],
-        "Neukölln":                   [5.19, 5.57, 6.70, 7.33, 7.73,  8.57,  9.00, 10.00, 10.00, 10.10,  9.38,  9.85, 10.55, 13.00, 14.50, 13.61],
-        "Treptow-Köpenick":           [5.55, 5.80, 6.55, 7.08, 7.12,  7.81,  8.24,  9.16,  9.62,  9.93, 10.19, 11.00, 11.60, 13.56, 14.45, 15.60],
-        "Marzahn-Hellersdorf":        [4.86, 4.85, 5.08, 5.55, 5.80,  5.76,  6.51,  7.16,  7.77,  7.90,  8.02,  8.26,  9.29, 10.61, 11.38, 11.56],
-        "Lichtenberg":                [5.51, 5.65, 6.53, 7.01, 7.50,  8.10,  8.80,  9.72,  9.53,  9.27,  9.08,  8.50, 10.45, 12.00, 15.15, 13.33],
-        "Reinickendorf":              [5.26, 5.49, 6.31, 6.86, 6.92,  7.50,  8.00,  8.73,  9.17,  9.42,  8.84,  8.99,  9.66, 10.61, 12.15, 12.80],
-        "Berlin (median)":            [5.82, 6.17, 7.40, 8.05, 8.25,  8.80,  9.07, 10.15, 10.32, 10.45, 10.14, 10.55, 11.54, 13.99, 15.74, 15.78],
-    }
-
-    ibb_years = IBB_DATA["year"]
-    bezirke = [k for k in IBB_DATA if k != "year"]
-
     fig_rent = go.Figure()
-    for bezirk in sorted(bezirke):
+    for bezirk in sorted(ASKING_RENTS):
         is_key = bezirk == "Mitte"
-        is_berlin = bezirk == "Berlin (median)"
+        is_berlin = bezirk == BERLIN_MEDIAN_KEY
         fig_rent.add_trace(go.Scatter(
-            x=ibb_years,
-            y=IBB_DATA[bezirk],
+            x=IBB_YEARS,
+            y=ASKING_RENTS[bezirk],
             mode="lines+markers",
             name=bezirk,
             line=dict(
@@ -1119,7 +1108,7 @@ with tab_umwelt:
         st.divider()
         st.subheader("Luftqualität im Jahresverlauf (Tagesmittelwerte)")
         fig_aq = go.Figure()
-        colour_map = {"NO₂": "#C0504D", "PM₁₀": "#FB8C00", "PM₂,₅": "#8E24AA", "O₃": "#1E88E5"}
+        colour_map = COMPONENT_COLOURS
         for col in sorted(c for c in aq_history.columns if c != "date"):
             fig_aq.add_trace(go.Scatter(
                 x=aq_history["date"],
@@ -1195,7 +1184,10 @@ with tab_umwelt:
         )
 
         st.divider()
-        col_dist, col_top = st.columns(2)
+        if _is_mobile:
+            col_dist, col_top = st.container(), st.container()
+        else:
+            col_dist, col_top = st.columns(2)
 
         # Distribution chart
         with col_dist:
@@ -1235,7 +1227,7 @@ with tab_umwelt:
                 y=top_df["Straße"],
                 orientation="h",
                 marker_color=[
-                    "#C0504D" if v >= 70 else "#FB8C00" if v >= 65 else "#FDD835"
+                    "#C0504D" if v >= 70 else "#FB8C00" if v >= 65 else "#FFB300"
                     for v in top_df["dB (Tag)"]
                 ],
                 text=[_fmt_float(v) for v in top_df["dB (Tag)"]],
@@ -1378,21 +1370,38 @@ with tab_crime:
                 _bz_text = _bz_data["Fallzahlen"].apply(_fmt_int)
                 _bz_title = "Fallzahlen"
             _bz_colours = [BEZIRK_COLOURS.get(b, "#888") for b in _bz_data["Bezirk"]]
-            fig_bz = go.Figure(go.Bar(
-                x=_bz_x,
-                y=_bz_data["Bezirk"],
-                orientation="h",
-                marker_color=_bz_colours,
-                text=_bz_text,
-                textposition="outside",
-            ))
-            fig_bz.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_bz_title),
-                margin=dict(t=10, b=20, r=80),
-                height=400,
-            )
+            if _is_mobile:
+                fig_bz = go.Figure(go.Bar(
+                    x=_bz_data["Bezirk"],
+                    y=_bz_x,
+                    marker_color=_bz_colours,
+                    text=_bz_text,
+                    textposition="outside",
+                ))
+                fig_bz.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_bz_title),
+                    xaxis=dict(tickangle=-40),
+                    margin=dict(t=40, b=100, r=20),
+                    height=440,
+                )
+            else:
+                fig_bz = go.Figure(go.Bar(
+                    x=_bz_x,
+                    y=_bz_data["Bezirk"],
+                    orientation="h",
+                    marker_color=_bz_colours,
+                    text=_bz_text,
+                    textposition="outside",
+                ))
+                fig_bz.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_bz_title),
+                    margin=dict(t=10, b=20, r=80),
+                    height=400,
+                )
             st.plotly_chart(fig_bz, use_container_width=True, config=_plot_config)
 
         st.divider()
@@ -1557,37 +1566,64 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
         _cats_bar = [c for c in CATEGORIES if c != "Straftaten insgesamt"]
         _west = _by_area[_bar_year].get("Moabit West", {})
         _ost  = _by_area[_bar_year].get("Moabit Ost",  {})
-        _sorted_cats = sorted(_cats_bar, reverse=True)
+        _sorted_cats = sorted(_cats_bar) if _is_mobile else sorted(_cats_bar, reverse=True)
         _vals_west = [_west.get(c, 0) for c in _sorted_cats]
         _vals_ost  = [_ost.get(c, 0)  for c in _sorted_cats]
         _totals    = [w + o for w, o in zip(_vals_west, _vals_ost)]
         fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            x=_vals_west, y=_sorted_cats, orientation="h",
-            name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
-            legendrank=2,
-        ))
-        fig_bar.add_trace(go.Bar(
-            x=_vals_ost, y=_sorted_cats, orientation="h",
-            name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
-            legendrank=1,
-            text=[_fmt_int(t) for t in _totals],
-            textposition="outside",
-        ))
-        fig_bar.update_layout(
-            barmode="stack",
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-            margin=dict(t=40, b=20, r=80),
-            height=480,
-        )
+        if _is_mobile:
+            fig_bar.add_trace(go.Bar(
+                x=_sorted_cats, y=_vals_west,
+                name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
+                legendrank=2,
+            ))
+            fig_bar.add_trace(go.Bar(
+                x=_sorted_cats, y=_vals_ost,
+                name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
+                legendrank=1,
+                text=[_fmt_int(t) for t in _totals],
+                textposition="outside",
+            ))
+            fig_bar.update_layout(
+                barmode="stack",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+                xaxis=dict(tickangle=-40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=120, r=20),
+                height=520,
+            )
+        else:
+            fig_bar.add_trace(go.Bar(
+                x=_vals_west, y=_sorted_cats, orientation="h",
+                name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
+                legendrank=2,
+            ))
+            fig_bar.add_trace(go.Bar(
+                x=_vals_ost, y=_sorted_cats, orientation="h",
+                name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
+                legendrank=1,
+                text=[_fmt_int(t) for t in _totals],
+                textposition="outside",
+            ))
+            fig_bar.update_layout(
+                barmode="stack",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=20, r=80),
+                height=480,
+            )
         st.plotly_chart(fig_bar, use_container_width=True, config=_plot_config)
         st.caption("Gestapelte Balken: Moabit West (blau) + Moabit Ost (rot). Beschriftung = Gesamtwert.")
 
 with tab_about:
-    col1, col2 = st.columns(2)
+    if _is_mobile:
+        col1, col2 = st.container(), st.container()
+    else:
+        col1, col2 = st.columns(2)
     with col1:
         st.subheader("Über Moabit")
         st.markdown("""
@@ -1598,7 +1634,7 @@ Moabit ist ein dichtbevölkerter Ortsteil im Bezirk Mitte, unmittelbar nördlich
         st.markdown("""
 Moabit ist eines der am dichtesten besiedelten und multikulturellsten Viertel Berlins. Rund **40 %** der Einwohner haben einen Migrationshintergrund: türkische, arabische und osteuropäische Gemeinschaften sind besonders präsent. Verglichen mit aufgewerteten Nachbarvierteln wie Mitte oder Prenzlauer Berg ist Moabit **authentischer und weniger gentrifiziert**; die Mieten sind bisher verhältnismäßig moderat geblieben, steigen aber.
 
-*Daten zur Bevölkerungsstruktur sind im Tab „Bevölkerung" zu finden.*
+*Daten zur Bevölkerungsstruktur sind im Tab „Bevölkerung“ zu finden.*
 """)
 
 
@@ -1620,9 +1656,9 @@ Das **Bundesministerium des Innern** hat seinen Berliner Dienstsitz in Moabit.
         st.markdown("""
 Im 13. Jahrhundert hieß das Gebiet noch *Große Stadtheide*, später *Kämmereiheide*. Die eigentliche Besiedlung begann **1685**, als Hugenotten (französische Glaubensflüchtlinge) hier angesiedelt wurden. Sie nannten ihre neue Heimat *terre de Moab*, nach dem biblischen Land Moab, der ersten Zufluchtsstätte der Israeliten nach dem Auszug aus Ägypten. 1716 entstand die Kolonie Moabit; 1801 zählte man erst 120 Bewohner.
 
-1818 entstand nördlich davon eine weitere Kolonie, die zur Unterscheidung den Namen **Neu-Moabit** erhielt. Mit der Industrialisierung folgte eine rasche Besiedlung beider Kolonien. **1861** wurden bei der Eingemeindung nach Berlin 6 534 Einwohner gezählt; bis 1910 war die Bevölkerung auf rund 190 000 angewachsen.
+1818 entstand nördlich davon eine weitere Kolonie, die zur Unterscheidung den Namen **Neu-Moabit** erhielt. Mit der Industrialisierung folgte eine rasche Besiedlung beider Kolonien. **1861** wurde Moabit nach Berlin eingemeindet; bis 1910 war die Bevölkerung auf rund 190 000 angewachsen.
 
-Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassische Arbeiterviertel. Von **1920 bis 2000** gehörte Moabit zum Bezirk Tiergarten; seit der Bezirksfusion am 1.  Januar 2001 ist es Ortsteil des neuen Bezirks Mitte.
+Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassische Arbeiterviertel. Von **1920 bis 2000** gehörte Moabit zum Bezirk Tiergarten; seit der Bezirksfusion am 1. Januar 2001 ist es Ortsteil des neuen Bezirks Mitte.
 """)
 
         _pop_data = {1801: 120, 1840: 986, 1860: 8200, 1871: 14818, 1880: 29693, 1910: 190000}
@@ -1650,18 +1686,33 @@ Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassisc
 Moabit hat keine festen amtlichen Kiezgrenzen; die Grenzen sind fließend. Historisch und städtebaulich werden jedoch sechs bis sieben Hauptkieze unterschieden:
 """)
 
-    _kc1, _kc2, _kc3 = st.columns(3)
-    _ks = 'min-height:160px; padding-bottom:0.5rem'
-    with _kc1:
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Alt-Moabit & Turmstraße</strong><br>Die zentralen Lebensadern Moabits. Rund um das Schultheiss Quartier und den Kleinen Tiergarten konzentrieren sich Handel, Gastronomie und öffentliches Leben.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Huttenkiez</strong><br>Mischung aus Wohnen und Industrie entlang der Huttenstraße (auch als ‘Hutteninsel’ bekannt). Rauher Charme, aber zunehmend im Wandel.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Westfälisches Viertel</strong><br>Ruhiges, bürgerlich geprägtes Gründerzeitviertel im Südwesten. Breite Straßen, gepflegte Altbauten und eine entspannte Wohnatmosphäre.</div>", unsafe_allow_html=True)
-    with _kc2:
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Beusselkiez</strong><br>Traditionelles Arbeiter- und Wohnviertel im Nordwesten, geprägt von gründerzeitlicher Blockbebauung und einer starken Nachbarschaftsidentität.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Lehrter-Straßen-Kiez</strong><br>Östliches Quartier zwischen Hauptbahnhof und Invalidenstraße, das sich in den vergangenen Jahren stark entwickelt hat.</div>", unsafe_allow_html=True)
-    with _kc3:
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Europacity</strong><br>Moderne Erweiterung im östlichen Moabit, direkt am Hauptbahnhof. Bürobauten, Neubauwohnungen und Gewerbeflächen prägen dieses noch im Entstehen begriffene Stadtquartier.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{_ks}'><strong style='font-size:1.1rem'>Stephankiez</strong><br>Einer der bekanntesten und besterhaltenen Gründerzeitkieze Berlins, rund um den Stephanplatz. Stuckfassaden, ruhige Straßen und eine entspannte, fast dörfliche Atmosphäre.</div>", unsafe_allow_html=True)
+    # Listed alphabetically. On desktop the i % 3 fill spreads them across three
+    # columns so they still read alphabetically left-to-right; on a phone the
+    # same list is simply stacked, which keeps that order intact.
+    _KIEZE = [
+        ("Alt-Moabit & Turmstraße", "Die zentralen Lebensadern Moabits. Rund um das Schultheiss Quartier und den Kleinen Tiergarten konzentrieren sich Handel, Gastronomie und öffentliches Leben."),
+        ("Beusselkiez", "Traditionelles Arbeiter- und Wohnviertel im Nordwesten, geprägt von gründerzeitlicher Blockbebauung und einer starken Nachbarschaftsidentität."),
+        ("Europacity", "Moderne Erweiterung im östlichen Moabit, direkt am Hauptbahnhof. Bürobauten, Neubauwohnungen und Gewerbeflächen prägen dieses noch im Entstehen begriffene Stadtquartier."),
+        ("Huttenkiez", "Mischung aus Wohnen und Industrie entlang der Huttenstraße (auch als ‘Hutteninsel’ bekannt). Rauher Charme, aber zunehmend im Wandel."),
+        ("Lehrter-Straßen-Kiez", "Östliches Quartier zwischen Hauptbahnhof und Invalidenstraße, das sich in den vergangenen Jahren stark entwickelt hat."),
+        ("Stephankiez", "Einer der bekanntesten und besterhaltenen Gründerzeitkieze Berlins, rund um den Stephanplatz. Stuckfassaden, ruhige Straßen und eine entspannte, fast dörfliche Atmosphäre."),
+        ("Westfälisches Viertel", "Ruhiges, bürgerlich geprägtes Gründerzeitviertel im Südwesten. Breite Straßen, gepflegte Altbauten und eine entspannte Wohnatmosphäre."),
+    ]
+
+    def _kiez_html(name, desc, style):
+        return (f"<div style='{style}'><strong style='font-size:1.1rem'>{name}</strong>"
+                f"<br>{desc}</div>")
+
+    if _is_mobile:
+        # No fixed height: in a single stacked column it would only add dead space.
+        for _name, _desc in _KIEZE:
+            st.markdown(_kiez_html(_name, _desc, "padding-bottom:0.9rem"), unsafe_allow_html=True)
+    else:
+        _ks = "min-height:160px; padding-bottom:0.5rem"
+        _kcols = st.columns(3)
+        for _i, (_name, _desc) in enumerate(_KIEZE):
+            with _kcols[_i % 3]:
+                st.markdown(_kiez_html(_name, _desc, _ks), unsafe_allow_html=True)
 
     st.markdown("""
 Darüber hinaus ist Moabit durch das Quartiersmanagement Berlin in zwei offizielle Fördergebiete eingeteilt: **Moabit-Ost** und **Beusselstraße/Moabit-West**. Diese Gebiete erhalten gezielte Förderung für soziale Infrastruktur, Nachbarschaftsprojekte und städtebauliche Entwicklung.

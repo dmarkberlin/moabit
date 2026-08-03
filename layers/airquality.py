@@ -18,11 +18,15 @@ MOABIT_STATIONS = [
 ]
 
 COMPONENTS = {
-    "5": ("NO₂",   "µg/m³", "#E53935"),
+    "5": ("NO₂",   "µg/m³", "#C0504D"),
     "1": ("PM₁₀",  "µg/m³", "#FB8C00"),
     "9": ("PM₂,₅", "µg/m³", "#8E24AA"),
     "3": ("O₃",    "µg/m³", "#1E88E5"),
 }
+
+# Single source of truth for pollutant colours, consumed by the Umwelt charts in
+# app.py so a pollutant is never two different colours.
+COMPONENT_COLOURS = {label: colour for label, _unit, colour in COMPONENTS.values()}
 
 # EU/WHO limit values (µg/m³, annual / hourly where applicable)
 LIMITS = {
@@ -32,16 +36,32 @@ LIMITS = {
     "O₃":    120,  # 8-hour max
 }
 
-# UBA index → German label and colour
+# UBA index → German label and colour.
+# Ordered severity ramp drawn from the dashboard's Material palette. The final
+# step (#7B2E2C) is a deliberately darkened shade of the standard red #C0504D —
+# the palette has no "worse than red" step of its own.
 INDEX_LABELS = {
     "0": ("sehr gut",         "#43A047"),
     "1": ("sehr gut",         "#43A047"),
     "2": ("gut",              "#7CB342"),
-    "3": ("mäßig",            "#FDD835"),
+    "3": ("mäßig",            "#FFB300"),
     "4": ("schlecht",         "#FB8C00"),
-    "5": ("sehr schlecht",    "#E53935"),
-    "6": ("äußerst schlecht", "#B71C1C"),
+    "5": ("sehr schlecht",    "#C0504D"),
+    "6": ("äußerst schlecht", "#7B2E2C"),
 }
+
+
+def _to_num(v):
+    """Coerce an API value to int/float, or None if it is not numeric.
+
+    The UBA endpoint is inconsistent about returning numbers vs numeric strings;
+    callers do arithmetic against the EU limits, so coerce once at the source.
+    """
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return None
+    return int(n) if n == int(n) else n
 
 
 def _fetch(component_id, scope, days=1):
@@ -68,8 +88,11 @@ def fetch_current():
         if not entries:
             continue
         _, vals = sorted(entries.items())[-1]
+        value = _to_num(vals[2])
+        if value is None:
+            continue
         result[label] = {
-            "value":  vals[2],
+            "value":  value,
             "unit":   unit,
             "colour": colour,
             "index":  vals[4],
@@ -84,12 +107,12 @@ def fetch_history(days=365):
         # Try pre-computed daily averages first; fall back to aggregating hourly
         entries = _fetch(comp_id, scope=1, days=days)
         if entries:
-            rows = [{"date": dt[:10], label: vals[2]} for dt, vals in entries.items()]
+            rows = [{"date": dt[:10], label: _to_num(vals[2])} for dt, vals in entries.items()]
         else:
             entries = _fetch(comp_id, scope=2, days=days)
             if not entries:
                 continue
-            rows = [{"date": dt[:10], label: vals[2]} for dt, vals in entries.items()]
+            rows = [{"date": dt[:10], label: _to_num(vals[2])} for dt, vals in entries.items()]
             df_hourly = pd.DataFrame(rows)
             df_hourly[label] = pd.to_numeric(df_hourly[label], errors="coerce")
             df_hourly = df_hourly.groupby("date")[label].mean().round(1).reset_index()

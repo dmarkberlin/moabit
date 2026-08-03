@@ -20,7 +20,10 @@ data/GTFS.zip
 *.zip
 *.html
 *.ipynb
+*.psd
 cache/
+Sources/
+.ipynb_checkpoints/
 app_EN.py
 moabit-json-blob.ipynb
 moabit_transport.html

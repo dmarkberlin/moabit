@@ -20,23 +20,41 @@ QUERY = f"""
 out geom;
 """
 
-# Style by feature type
+# Dashboard Material palette. The three vegetated types stay in the green family
+# (park → garden → grass, darkest to lightest); the built types take contrasting
+# hues so they read as different in kind, not merely a different shade of green.
+_GREEN_COLOURS = {
+    "park":               "#43A047",
+    "garden":             "#7CB342",
+    "grass":              "#B6E880",
+    "recreation_ground":  "#FB8C00",
+    "playground":         "#FFB300",
+    "sports_centre":      "#039BE5",
+}
+
+_FILL_OPACITY = {
+    "park": 0.4, "garden": 0.4, "grass": 0.3,
+    "recreation_ground": 0.3, "playground": 0.4, "sports_centre": 0.3,
+}
+_WEIGHT = {"grass": 0.5}
+
 FEATURE_STYLE = {
-    "park":               {"color": "#1D9E75", "fillColor": "#1D9E75", "fillOpacity": 0.4, "weight": 1},
-    "garden":             {"color": "#2ECC71", "fillColor": "#2ECC71", "fillOpacity": 0.4, "weight": 1},
-    "grass":              {"color": "#72CEB0", "fillColor": "#72CEB0", "fillOpacity": 0.3, "weight": 0.5},
-    "recreation_ground":  {"color": "#EF9F27", "fillColor": "#EF9F27", "fillOpacity": 0.3, "weight": 1},
-    "playground":         {"color": "#F7D070", "fillColor": "#F7D070", "fillOpacity": 0.4, "weight": 1},
-    "sports_centre":      {"color": "#4FC3F7", "fillColor": "#4FC3F7", "fillOpacity": 0.3, "weight": 1},
+    key: {
+        "color":       colour,
+        "fillColor":   colour,
+        "fillOpacity": _FILL_OPACITY[key],
+        "weight":      _WEIGHT.get(key, 1),
+    }
+    for key, colour in _GREEN_COLOURS.items()
 }
 
 LEGEND = {
-    "Park":           "#1D9E75",
-    "Garten":         "#2ECC71",
-    "Rasenfläche":    "#72CEB0",
-    "Freizeitgelände":"#EF9F27",
-    "Spielplatz":     "#F7D070",
-    "Sportstätte":    "#4FC3F7",
+    "Park":            _GREEN_COLOURS["park"],
+    "Garten":          _GREEN_COLOURS["garden"],
+    "Rasenfläche":     _GREEN_COLOURS["grass"],
+    "Freizeitgelände": _GREEN_COLOURS["recreation_ground"],
+    "Spielplatz":      _GREEN_COLOURS["playground"],
+    "Sportstätte":     _GREEN_COLOURS["sports_centre"],
 }
 
 def _way_to_geojson(el):

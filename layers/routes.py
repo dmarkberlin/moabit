@@ -1,5 +1,6 @@
 import json
 import os
+from shapely.errors import GEOSException
 from shapely.geometry import shape, LineString, MultiLineString
 from layers.overpass import overpass_post
 from layers.utils import load_boundary
@@ -19,18 +20,37 @@ out geom;
 """
 
 
+# Mode colours are deliberately NOT part of the dashboard's Material palette:
+# they carry meaning. Berlin transit maps and signage colour by mode (blue
+# U-Bahn, green S-Bahn, red Tram, purple Bus), so a local reads the line type
+# without consulting the legend.
+#
+# Values are taken from the official logo SVGs in images/ — the same assets the
+# departure boards render — so a route line matches its logo exactly. They
+# correspond to the BVG corporate-design RAL specification:
+#   U-Bahn  Verkehrsblau    RAL 5017
+#   S-Bahn  Verkehrsgrün    RAL 6024
+#   Tram    Verkehrsrot     RAL 3020
+#   Bus     Verkehrspurpur  RAL 4006
+MODE_COLOURS = {
+    "subway":     "#0664AB",  # U-Bahn-Logo-BVG.svg
+    "light_rail": "#008D4F",  # S-Bahn-Logo.svg
+    "tram":       "#D82020",  # Tram-Logo-BVG.svg
+    "bus":        "#A5027D",  # BUS-Logo-BVG.svg
+}
+
 ROUTE_STYLE = {
-    "bus":        {"colour": "#A020F0", "weight": 2, "opacity": 0.7},
-    "tram":       {"colour": "#CC0000", "weight": 3, "opacity": 0.8},
-    "subway":     {"colour": "#0A4B9A", "weight": 3, "opacity": 0.8},
-    "light_rail": {"colour": "#006E35", "weight": 3, "opacity": 0.8},
+    "bus":        {"colour": MODE_COLOURS["bus"],        "weight": 2, "opacity": 0.7},
+    "tram":       {"colour": MODE_COLOURS["tram"],       "weight": 3, "opacity": 0.8},
+    "subway":     {"colour": MODE_COLOURS["subway"],     "weight": 3, "opacity": 0.8},
+    "light_rail": {"colour": MODE_COLOURS["light_rail"], "weight": 3, "opacity": 0.8},
 }
 
 LEGEND = {
-    "Bus":    "#A020F0",
-    "Tram":   "#CC0000",
-    "U-Bahn": "#0A4B9A",
-    "S-Bahn": "#006E35",
+    "Bus":    MODE_COLOURS["bus"],
+    "Tram":   MODE_COLOURS["tram"],
+    "U-Bahn": MODE_COLOURS["subway"],
+    "S-Bahn": MODE_COLOURS["light_rail"],
 }
 
 def _relation_to_features(el):
@@ -111,7 +131,8 @@ def fetch_routes():
                     f = dict(feature)
                     f["geometry"] = {"type": "LineString", "coordinates": [[c[0], c[1]] for c in coords]}
                     features.append(f)
-            except Exception:
+            except (GEOSException, ValueError, TypeError, KeyError):
+                # Malformed OSM geometry — skip this segment, keep the route.
                 continue
 
     with open(CACHE_PATH, "w", encoding="utf-8") as f:

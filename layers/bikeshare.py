@@ -36,11 +36,11 @@ def fetch_bikeshare_stations():
         lat, lon = info["lat"], info["lon"]
         if not boundary.contains(Point(lon, lat)):
             continue
-        st = status.get(sid, {})
-        if not st.get("is_installed", True) or not st.get("is_renting", True):
+        stat = status.get(sid, {})
+        if not stat.get("is_installed", True) or not stat.get("is_renting", True):
             continue
-        bikes = st.get("num_bikes_available", 0)
-        docks = st.get("num_docks_available", 0)
+        bikes = stat.get("num_bikes_available", 0)
+        docks = stat.get("num_docks_available", 0)
         result.append({
             "id":       sid,
             "name":     info["name"],

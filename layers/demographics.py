@@ -2,7 +2,6 @@ import os
 import re
 import pandas as pd
 
-CSV_PATH = "data/EWR_L21_202412E_Matrix.csv"
 XLSX_DIR = "data"
 
 # Moabit: Bezirk 1 (Mitte)
@@ -11,17 +10,6 @@ XLSX_DIR = "data"
 MOABIT_BEZ = "01"
 MOABIT_BZR_NEW = [4.0, 5.0]
 MOABIT_BZR_OLD = [21.0, 22.0]
-
-AGE_BANDS = {
-    "0–5":   ["E_EU1", "E_E1U6"],
-    "6–14":  ["E_E6U15"],
-    "15–17": ["E_E15U18"],
-    "18–24": ["E_E18U25"],
-    "25–54": ["E_E25U55"],
-    "55–64": ["E_E55U65"],
-    "65–79": ["E_E65U80"],
-    "80+":   ["E_E80U110"],
-}
 
 # (fragment, display, exact) — if exact=True, the cell must contain ONLY this
 # fragment (after stripping) rather than just containing it anywhere.
@@ -55,7 +43,6 @@ T4_TARGETS = [
     ("nicht",        "Other",                False),
 ]
 
-# Muted earth palette — flat, no semantic grouping, assigned alphabetically.
 # Bright Material-family palette, consistent with the chart colours used across
 # the rest of the dashboard. 26 distinct hues; alphabetical neighbours (the order
 # the donut renders in) are chosen to contrast. "Other" stays neutral blue-grey.
@@ -87,29 +74,6 @@ COUNTRY_COLOURS = {
     "USA":            "#FF6692",
     "Vietnam":        "#FECB52",
 }
-
-# --- Current snapshot (from CSV) ---
-
-def load_moabit():
-    df = pd.read_csv(CSV_PATH, sep=None, engine="python", encoding="utf-8-sig")
-    bzr_vals = [int(v) for v in MOABIT_BZR_NEW]
-    return df[(df["BEZ"] == 1) & (df["BZR"].isin(bzr_vals))]
-
-def population_total(df):
-    return int(df["E_E"].sum())
-
-def population_by_gender(df):
-    return {
-        "Male":   int(df["E_EM"].sum()),
-        "Female": int(df["E_EW"].sum()),
-    }
-
-def population_by_age(df):
-    result = {}
-    for label, cols in AGE_BANDS.items():
-        valid = [c for c in cols if c in df.columns]
-        result[label] = int(df[valid].sum().sum())
-    return result
 
 # --- XLSX helpers ---
 
@@ -311,7 +275,6 @@ def nationality_over_time():
 
 def precompute():
     """Run locally to generate JSON caches for deployment."""
-    import json
     population_over_time().to_json(CACHE_TREND, orient="records", indent=2)
     migration_over_time().to_json(CACHE_MIGRATION, orient="records", indent=2)
     nat = nationality_over_time()

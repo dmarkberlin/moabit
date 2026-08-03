@@ -1,9 +1,8 @@
-streamlit
-folium
-streamlit-folium
-requests
-geopandas
-pandas
-openpyxl
-shapely
-plotly
+streamlit==1.58.0
+folium==0.20.0
+streamlit-folium==0.27.2
+requests==2.34.2
+pandas==3.0.3
+openpyxl==3.1.5
+shapely==2.1.2
+plotly==6.8.0

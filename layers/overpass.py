@@ -2,7 +2,7 @@ import requests
 
 _MIRRORS = [
     "https://overpass-api.de/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
 ]
 
 def overpass_post(query, timeout=60):

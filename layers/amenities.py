@@ -25,14 +25,17 @@ QUERY = f"""
 out center;
 """
 
+# Dashboard Material palette. Assignments are arbitrary except that the two
+# health types stay adjacent (blue/cyan) and the two retail types stay adjacent
+# (purple/deep purple), so related categories read as related.
 AMENITY_STYLE = {
-    "school":       {"colour": "#E24B4A", "label": "Schule"},
-    "kindergarten": {"colour": "#EF9F27", "label": "Kita"},
-    "pharmacy":     {"colour": "#1D9E75", "label": "Apotheke"},
-    "doctors":      {"colour": "#4FC3F7", "label": "Arzt"},
-    "clinic":       {"colour": "#0097A7", "label": "Klinik"},
-    "supermarket":  {"colour": "#9B59B6", "label": "Supermarkt"},
-    "convenience":  {"colour": "#B07FD4", "label": "Kiosk"},
+    "school":       {"colour": "#C0504D", "label": "Schule"},
+    "kindergarten": {"colour": "#FB8C00", "label": "Kita"},
+    "pharmacy":     {"colour": "#43A047", "label": "Apotheke"},
+    "doctors":      {"colour": "#039BE5", "label": "Arzt"},
+    "clinic":       {"colour": "#00ACC1", "label": "Klinik"},
+    "supermarket":  {"colour": "#8E24AA", "label": "Supermarkt"},
+    "convenience":  {"colour": "#5E35B1", "label": "Kiosk"},
 }
 
 LEGEND = {v["label"]: v["colour"] for v in AMENITY_STYLE.values()}

@@ -1,4 +1,5 @@
 import math
+import statistics
 import requests
 import pandas as pd
 from collections import defaultdict
@@ -74,19 +75,24 @@ def fetch_noise_data():
     )[:10]
     top_df = pd.DataFrame(top_streets, columns=["Straße", "dB (Tag)"])
 
-    # Summary metrics
+    # Summary metrics. Callers use every field unconditionally (including
+    # arithmetic between them), so bail out entirely rather than emit partial
+    # metrics when either series came back empty.
     n = len(day_vals)
-    if n == 0:
+    if n == 0 or not night_vals:
         return None
     above_day   = sum(1 for v in day_vals   if v > THRESHOLDS["Tag"])
     above_night = sum(1 for v in night_vals if v > THRESHOLDS["Nacht"])
 
+    # statistics.median averages the two middle values for even-length inputs and
+    # each series is indexed by its own length — the previous sorted(...)[n // 2]
+    # did neither, and would IndexError if night had fewer segments than day.
     metrics = {
         "n_segments":        n,
-        "median_day":        round(sorted(day_vals)[n // 2], 1),
-        "median_night":      round(sorted(night_vals)[n // 2], 1),
+        "median_day":        round(statistics.median(day_vals), 1),
+        "median_night":      round(statistics.median(night_vals), 1),
         "above_day_pct":     round(above_day   / n * 100, 1),
-        "above_night_pct":   round(above_night / n * 100, 1),
+        "above_night_pct":   round(above_night / len(night_vals) * 100, 1),
     }
 
     return {"dist": dist_df, "top": top_df, "metrics": metrics}

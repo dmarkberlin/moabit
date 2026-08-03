@@ -1,45 +1,31 @@
-import json
-import os
-import requests
-from shapely.geometry import Point
-from layers.utils import load_boundary
+"""IBB asking-rent series by Bezirk (net cold, €/m²), 2008–2025.
 
-WFS_URL = "https://gdi.berlin.de/services/wfs/wohnlagenadr2024"
+Transcribed from the IBB Wohnungsmarktbericht Tabellenbände (the source scans
+live in data/Tab.*.png). No moabit-specific series is published, so the Mitte
+row is the closest available proxy.
 
-PARAMS = {
-    "SERVICE":      "WFS",
-    "VERSION":      "2.0.0",
-    "REQUEST":      "GetFeature",
-    "TYPENAMES":    "wohnlagenadr2024:wohnlagenadr2024",
-    "SRSNAME":      "EPSG:4326",
-    "outputFormat": "application/json",
-    "COUNT":        "5000",
-    "CQL_FILTER":   "bezname='Mitte' AND BBOX(geom,13.3110,52.5165,13.3720,52.5420,'EPSG:4326')",
+Early editions report overlapping periods; those are mapped to their midpoint
+year (2008/09 → 2009, 2009/10 → 2010, 2011/12 → 2012, 2012/13 → 2013,
+2013/14 → 2014). There is no data for 2011 or 2014.
+"""
+
+YEARS = [2009, 2010, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019,
+         2020, 2021, 2022, 2023, 2024, 2025]
+
+BERLIN_MEDIAN_KEY = "Berlin (median)"
+
+ASKING_RENTS = {
+    "Mitte":                      [5.37, 6.18, 8.03, 9.39, 9.36, 10.06, 10.51, 12.77, 12.51, 13.45, 13.70, 14.00, 15.46, 18.26, 19.91, 20.00],
+    "Friedrichshain-Kreuzberg":   [6.42, 7.00, 8.61, 9.64, 9.98, 10.99, 11.50, 12.50, 12.94, 13.01, 13.11, 13.52, 14.85, 18.33, 19.42, 19.40],
+    "Pankow":                     [6.13, 6.73, 8.00, 8.56, 8.99,  9.45,  9.99, 10.86, 10.97, 10.96, 10.50, 11.73, 12.50, 14.93, 17.00, 17.00],
+    "Charlottenburg-Wilmersdorf": [6.56, 7.53, 8.93, 9.86, 9.49, 10.00, 10.53, 11.86, 12.00, 12.63, 12.38, 13.29, 15.00, 17.20, 19.39, 19.17],
+    "Spandau":                    [5.26, 5.28, 5.93, 6.48, 6.58,  6.99,  7.35,  7.95,  8.59,  8.86,  8.53,  8.22,  8.67, 10.13, 12.00, 12.50],
+    "Steglitz-Zehlendorf":        [6.29, 6.88, 7.99, 8.50, 8.50,  8.87,  9.38, 10.00, 10.44, 10.70, 10.31, 11.03, 12.31, 13.33, 14.59, 15.00],
+    "Tempelhof-Schöneberg":       [5.84, 6.23, 7.49, 8.00, 8.01,  8.50,  9.00,  9.97, 10.30, 10.52,  9.97, 10.22, 11.31, 12.94, 14.67, 15.79],
+    "Neukölln":                   [5.19, 5.57, 6.70, 7.33, 7.73,  8.57,  9.00, 10.00, 10.00, 10.10,  9.38,  9.85, 10.55, 13.00, 14.50, 13.61],
+    "Treptow-Köpenick":           [5.55, 5.80, 6.55, 7.08, 7.12,  7.81,  8.24,  9.16,  9.62,  9.93, 10.19, 11.00, 11.60, 13.56, 14.45, 15.60],
+    "Marzahn-Hellersdorf":        [4.86, 4.85, 5.08, 5.55, 5.80,  5.76,  6.51,  7.16,  7.77,  7.90,  8.02,  8.26,  9.29, 10.61, 11.38, 11.56],
+    "Lichtenberg":                [5.51, 5.65, 6.53, 7.01, 7.50,  8.10,  8.80,  9.72,  9.53,  9.27,  9.08,  8.50, 10.45, 12.00, 15.15, 13.33],
+    "Reinickendorf":              [5.26, 5.49, 6.31, 6.86, 6.92,  7.50,  8.00,  8.73,  9.17,  9.42,  8.84,  8.99,  9.66, 10.61, 12.15, 12.80],
+    BERLIN_MEDIAN_KEY:            [5.82, 6.17, 7.40, 8.05, 8.25,  8.80,  9.07, 10.15, 10.32, 10.45, 10.14, 10.55, 11.54, 13.99, 15.74, 15.78],
 }
-
-CACHE_PATH = "data/wohnlagen.geojson"
-
-WOL_STYLE = {
-    "einfach": {"colour": "#E24B4A", "label": "Einfach"},
-    "mittel":  {"colour": "#EF9F27", "label": "Mittel"},
-    "gut":     {"colour": "#1D9E75", "label": "Gut"},
-}
-
-def fetch_wohnlagen():
-    if os.path.exists(CACHE_PATH):
-        with open(CACHE_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    response = requests.get(WFS_URL, params=PARAMS, timeout=30)
-    response.raise_for_status()
-    features = response.json()["features"]
-
-    # Filter to points strictly within the Moabit boundary polygon
-    boundary = load_boundary()
-    features = [
-        f for f in features
-        if boundary.contains(Point(f["geometry"]["coordinates"][:2]))
-    ]
-
-    with open(CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(features, f)
-    return features

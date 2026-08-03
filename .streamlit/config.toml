@@ -1,0 +1,6 @@
+[theme]
+# The dashboard hardcodes dark-theme styling throughout: white chart gridlines
+# (rgba(255,255,255,0.1)), light metric text (#fafafa) and CartoDB dark_matter
+# map tiles. Without this pin Streamlit follows the visitor's system preference,
+# which renders that styling invisible for anyone in light mode.
+base = "dark"
