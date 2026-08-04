@@ -584,16 +584,16 @@ with tab_map:
         m,
         use_container_width=True,
         height=350 if _is_mobile else 500,
-        # "center"/"zoom" must be requested explicitly, otherwise st_folium omits
-        # them and the pan/zoom restore below silently never fires.
-        returned_objects=["last_object_clicked", "center", "zoom"],
+        # Deliberately NOT requesting "center"/"zoom". st_folium reruns the script
+        # whenever a requested value changes, so asking for the viewport means a
+        # rerun on every map movement — and because Leaflet re-reports a slightly
+        # different centre after the map is rebuilt at a rounded one, that feeds
+        # back on itself and the map refreshes continuously. Persisting the
+        # viewport and not rerunning are mutually exclusive with this component,
+        # so the map resets to the default view when the script reruns.
+        returned_objects=["last_object_clicked"],
         key="moabit_map",
     )
-
-    if map_data.get("center"):
-        st.session_state.map_center = [map_data["center"]["lat"], map_data["center"]["lng"]]
-    if map_data.get("zoom"):
-        st.session_state.map_zoom = map_data["zoom"]
 
     if show_transport and map_data.get("last_object_clicked"):
         click = map_data["last_object_clicked"]
