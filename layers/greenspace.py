@@ -48,14 +48,18 @@ FEATURE_STYLE = {
     for key, colour in _GREEN_COLOURS.items()
 }
 
-LEGEND = {
-    "Park":            _GREEN_COLOURS["park"],
-    "Garten":          _GREEN_COLOURS["garden"],
-    "Rasenfläche":     _GREEN_COLOURS["grass"],
-    "Freizeitgelände": _GREEN_COLOURS["recreation_ground"],
-    "Spielplatz":      _GREEN_COLOURS["playground"],
-    "Sportstätte":     _GREEN_COLOURS["sports_centre"],
+# German display label per OSM feature type, for the legend and the map tooltip
+# (the cached features carry the raw OSM value, e.g. "recreation_ground").
+TYPE_LABELS = {
+    "park":               "Park",
+    "garden":             "Garten",
+    "grass":              "Rasenfläche",
+    "recreation_ground":  "Freizeitgelände",
+    "playground":         "Spielplatz",
+    "sports_centre":      "Sportstätte",
 }
+
+LEGEND = {TYPE_LABELS[key]: colour for key, colour in _GREEN_COLOURS.items()}
 
 def _way_to_geojson(el):
     """Convert an Overpass way with geometry to a GeoJSON feature."""

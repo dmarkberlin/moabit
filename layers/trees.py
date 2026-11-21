@@ -34,6 +34,62 @@ TREE_TYPES = {
 FIELDS = ["lat", "lon", "type", "species", "botanical", "year", "height",
           "trunk", "crown", "street", "number"]
 
+# British English common names for the register's German species names, used by
+# the English version of the app. Covers the species common in Moabit (the
+# top ~45 by count, plus the oldest trees); anything else falls back to the
+# German name, and the botanical name is always shown alongside.
+SPECIES_EN = {
+    "Spitz-Ahorn": "Norway maple",
+    "Winter-Linde": "Small-leaved lime",
+    "Ahornblättrige Platane": "London plane",
+    "Gemeine Rosskastanie": "Horse chestnut",
+    "Berg-Ahorn, Weiss-Ahorn": "Sycamore",
+    "Feld-Ahorn": "Field maple",
+    "Holländische Linde": "Common lime",
+    "Baum-Hasel": "Turkish hazel",
+    "Pyramiden-Hainbuche": "Fastigiate hornbeam",
+    "Robinie": "Black locust",
+    "Sommer-Eiche, Stiel-Eiche": "English oak",
+    "Sommer-Linde": "Large-leaved lime",
+    "Sand-Birke": "Silver birch",
+    "Sumpf-Eiche": "Pin oak",
+    "Amerikanische Rot-Eiche": "Northern red oak",
+    "Hainbuche": "Hornbeam",
+    "Resista Ulme 'Regal'": "Resista elm 'Regal'",
+    "Italienische Pyramiden-Pappel": "Lombardy poplar",
+    "Silber-Ahorn": "Silver maple",
+    "Silber-Linde": "Silver lime",
+    "Japanischer Schnurbaum": "Japanese pagoda tree",
+    "Dreidorniger Lederhülsenbaum": "Honey locust",
+    "Pyramiden-Eiche": "Cypress oak",
+    "Birken-Pappel": "Simon's poplar",
+    "Feldahorn 'Elsrijk'": "Field maple 'Elsrijk'",
+    "Unbekannt": "Unknown",
+    "Einblattakazie": "Black locust 'Unifoliola'",
+    "Säulenförmiger Spitz-Ahorn": "Columnar Norway maple",
+    "Zier-Feld-Ahorn 'Red Shine'": "Field maple 'Red Shine'",
+    "Gewöhnliche Esche": "European ash",
+    "Götterbaum": "Tree of heaven",
+    "Echter Rotdorn": "Midland hawthorn 'Paul's Scarlet'",
+    "Gold-Gleditschie": "Honey locust 'Sunburst'",
+    "Süss-Kirsche,Vogel-Kirsche": "Wild cherry",
+    "Fächerblattbaum": "Ginkgo",
+    "Resista Ulme 'Fiorente'": "Resista elm 'Fiorente'",
+    "Rotblühende Rosskastanie": "Red horse chestnut",
+    "Amberbaum": "Sweetgum",
+    "Säulen-Blumenesche": "Manna ash 'Obelisk'",
+    "Rot-Buche": "Common beech",
+    "Resista Ulme 'Rebona'": "Resista elm 'Rebona'",
+    "Hybrid-Pappel": "Hybrid black poplar",
+    "Purpur-Erle": "Späth's alder",
+    "Trauben-Eiche": "Sessile oak",
+    "Eisenholzbaum, Parrotie": "Persian ironwood",
+    "Blutbuche": "Copper beech",
+    "Berg-Ulme": "Wych elm",
+    "Gemeine Eibe": "Common yew",
+    "Stechpalme, Gemeine Hülse": "Holly",
+}
+
 
 def _num(v):
     """0 and empty mean 'not recorded' in this dataset."""

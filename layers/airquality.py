@@ -1,8 +1,18 @@
+import time
+
 import requests
 import pandas as pd
 from datetime import date, timedelta
 
-_BASE = "https://www.umweltbundesamt.de/api/air_data/v3/measures/json"
+# The UBA moved its air-data API to this host (the old
+# www.umweltbundesamt.de/api/air_data/... address now only redirects here).
+_BASE = "https://luftdaten.umweltbundesamt.de/api/air-data/v3/measures/json"
+
+# The new host intermittently answers 410 Gone (and the odd 5xx) for requests
+# that succeed moments later, so transient failures are retried briefly.
+_RETRY_STATUS = {410, 429, 500, 502, 503, 504}
+_RETRIES = 2
+_RETRY_DELAY_S = 1.5
 
 # Berlin Wedding (DEBE010) — nearest active station to Moabit with full component coverage
 STATION_ID   = "121"
@@ -67,7 +77,7 @@ def _to_num(v):
 def _fetch(component_id, scope, days=1):
     today    = date.today()
     date_from = (today - timedelta(days=days)).isoformat()
-    r = requests.get(_BASE, params={
+    params = {
         "date_from": date_from,
         "time_from": 1,
         "date_to":   today.isoformat(),
@@ -75,7 +85,17 @@ def _fetch(component_id, scope, days=1):
         "station":   STATION_ID,
         "component": component_id,
         "scope":     scope,
-    }, timeout=15)
+    }
+    for attempt in range(_RETRIES + 1):
+        try:
+            r = requests.get(_BASE, params=params, timeout=15)
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == _RETRIES:
+                raise
+        else:
+            if r.status_code not in _RETRY_STATUS or attempt == _RETRIES:
+                break
+        time.sleep(_RETRY_DELAY_S)
     r.raise_for_status()
     return r.json().get("data", {}).get(STATION_ID, {})
 

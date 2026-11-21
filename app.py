@@ -19,8 +19,8 @@ from layers.transport import fetch_stops, stop_style
 from layers.cycling import fetch_cycle_lanes, lane_style, LEGEND as CYCLE_LEGEND
 from layers.wohnlagen import fetch_wohnlagen, WOL_STYLE
 from layers.rent import YEARS as IBB_YEARS, ASKING_RENTS, BERLIN_MEDIAN_KEY
-from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND
-from layers.trees import fetch_trees, TREE_TYPES, FIELDS as TREE_FIELDS
+from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND, TYPE_LABELS as GREEN_TYPE_LABELS
+from layers.trees import fetch_trees, TREE_TYPES, FIELDS as TREE_FIELDS, SPECIES_EN
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, ROUTE_STYLE, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
@@ -57,8 +57,109 @@ _is_mobile = any(kw in _ua for kw in ("Mobile", "Android", "iPhone", "iPad"))
 _plot_config = {"staticPlot": True} if _is_mobile else {}
 
 
+# --- Language -----------------------------------------------------------------
+# One code base for both languages: every visible string goes through tr(de, en).
+# The choice is kept in ?lang=en so English links can be shared. The switch sits
+# in the header rather than the sidebar, which is collapsed by default on phones.
+_LANG_OPTIONS = ["Deutsch", "English"]
+if "lang" not in st.session_state:
+    st.session_state.lang = "English" if st.query_params.get("lang", "").lower() == "en" else "Deutsch"
+
 _title_size = "1.3rem" if _is_mobile else "1.8rem"
-st.markdown(f"<h1 style='font-size:{_title_size}; margin-bottom:0.25rem'>Moabiter Dashboard</h1>", unsafe_allow_html=True)
+_hdr_title, _hdr_lang = st.columns([4, 1], vertical_alignment="center")
+with _hdr_title:
+    st.markdown(f"<h1 style='font-size:{_title_size}; margin-bottom:0.25rem'>Moabiter Dashboard</h1>", unsafe_allow_html=True)
+with _hdr_lang:
+    st.radio("Sprache / Language", _LANG_OPTIONS, key="lang", horizontal=True, label_visibility="collapsed")
+
+LANG = "en" if st.session_state.lang == "English" else "de"
+if LANG == "en":
+    st.query_params["lang"] = "en"
+elif "lang" in st.query_params:
+    del st.query_params["lang"]
+
+
+def tr(de, en):
+    """Return the string for the active language."""
+    return en if LANG == "en" else de
+
+
+# English for labels defined in the layer modules (which stay German-only).
+_LABEL_EN = {
+    # cycle lanes
+    "Fahrradweg": "Cycle path", "Radfahrstreifen": "Painted cycle lane", "Sonstige": "Other",
+    # Wohnlagen (Berlin rent-index categories)
+    "Einfach": "Simple", "Mittel": "Medium", "Gut": "Good",
+    # amenities
+    "Schule": "School", "Kita": "Kita (nursery)", "Apotheke": "Pharmacy", "Arzt": "Doctor",
+    "Klinik": "Clinic", "Supermarkt": "Supermarket", "Kiosk": "Corner shop (Kiosk)",
+    # green spaces
+    "Park": "Park", "Garten": "Garden", "Rasenfläche": "Lawn", "Freizeitgelände": "Recreation ground",
+    "Spielplatz": "Playground", "Sportstätte": "Sports ground",
+    # trees
+    "Straßenbaum": "Street tree", "Anlagenbaum": "Park tree",
+    # noise map options
+    "Gesamt": "All sources", "Straße": "Road", "Tram & U-Bahn": "Tram & U-Bahn",
+    "24 h": "24 h", "Nacht": "Night",
+    # air quality: pollutant label (German decimal comma) and UBA index
+    "PM₂,₅": "PM₂.₅",
+    "sehr gut": "very good", "gut": "good", "mäßig": "moderate",
+    "schlecht": "poor", "sehr schlecht": "very poor", "äußerst schlecht": "extremely poor",
+    # noise-sensitive buildings
+    "Kitas": "Kitas (nurseries)", "Schulen & Bildung": "Schools & education", "Krankenhäuser": "Hospitals",
+    # crime: measures, areas and offence categories (police statistics, PKS)
+    "Fallzahlen": "Recorded offences", "HZ (pro 100 000 Einwohner)": "Rate per 100,000 residents",
+    "HZ": "Rate per 100,000 residents", "Moabit (gesamt)": "Moabit (total)",
+    "Straftaten insgesamt": "All offences",
+    "Raub": "Robbery",
+    "Straßenraub / Handtaschenraub": "Street robbery / bag snatching",
+    "Körperverletzungen insgesamt": "Assault (all)",
+    "Gefährl. Körperverletzung": "Aggravated assault",
+    "Bedrohung / Nötigung": "Threats / coercion",
+    "Diebstahl insgesamt": "Theft (all)",
+    "Kfz-Diebstahl": "Vehicle theft",
+    "Diebstahl an/aus Kfz": "Theft from vehicles",
+    "Fahrraddiebstahl": "Bicycle theft",
+    "Wohnraumeinbruch": "Domestic burglary",
+    "Branddelikte insgesamt": "Arson offences (all)",
+    "Brandstiftung": "Arson",
+    "Sachbeschädigung insgesamt": "Criminal damage (all)",
+    "Graffiti": "Graffiti",
+    "Rauschgiftdelikte": "Drug offences",
+    "Kieztaten": "Neighbourhood offences (Kieztaten)",
+}
+
+
+def trl(label):
+    """Translate a German label from a layer module, if English is active."""
+    return _LABEL_EN.get(label, label) if LANG == "en" else label
+
+
+# The demographics data keys countries by English name (also the colour keys).
+_COUNTRY_DE = {
+    "Afghanistan": "Afghanistan", "Austria": "Österreich", "Bosnia & Herz.": "Bosnien-Herz.",
+    "Bulgaria": "Bulgarien", "China": "China", "Croatia": "Kroatien", "France": "Frankreich",
+    "Greece": "Griechenland", "India": "Indien", "Iran": "Iran", "Iraq": "Irak", "Italy": "Italien",
+    "Kazakhstan": "Kasachstan", "Lebanon": "Libanon", "Other": "Sonstige", "Poland": "Polen",
+    "Romania": "Rumänien", "Russia": "Russland", "Serbia": "Serbien", "Spain": "Spanien",
+    "Syria": "Syrien", "Turkey": "Türkei", "UK": "Ver. Königreich", "Ukraine": "Ukraine",
+    "USA": "USA", "Vietnam": "Vietnam",
+}
+
+
+def tr_country(name):
+    """Display name for a country key from the demographics data."""
+    return name if LANG == "en" else _COUNTRY_DE.get(name, name)
+
+
+def tr_species(name):
+    """English common name for a German tree species, if known and English is active."""
+    return SPECIES_EN.get(name, name) if LANG == "en" else name
+
+
+def _tr_delay(text):
+    """Station boards report punctuality in German; "+3 min" needs no translation."""
+    return tr(text, "on time") if text == "pünktlich" else text
 
 @st.cache_data
 def _load_boundary():
@@ -177,14 +278,17 @@ _TYPE_ICON = {
     "ICE":        _svg_uri("ICE-Logo.svg", scale=0.90,    title="InterCityExpress"),
 }
 
+# German: 1.234 · 12,3 % · 4,5 — English: 1,234 · 12.3% · 4.5
 def _fmt_int(n) -> str:
-    return f"{int(n):,}".replace(",", ".")
+    s = f"{int(n):,}"
+    return s if LANG == "en" else s.replace(",", ".")
 
 def _fmt_pct(p) -> str:
-    return f"{p:.1f}".replace(".", ",") + " %"
+    return f"{p:.1f}%" if LANG == "en" else f"{p:.1f}".replace(".", ",") + " %"
 
 def _fmt_float(v, decimals=1) -> str:
-    return f"{v:.{decimals}f}".replace(".", ",")
+    s = f"{v:.{decimals}f}"
+    return s if LANG == "en" else s.replace(".", ",")
 
 # Single source of truth for the 12 Berlin Bezirke colours, shared by the rent
 # chart (Bevölkerung tab) and the crime charts so a Bezirk is never two colours.
@@ -295,8 +399,8 @@ def fetch_arrivals(stop_id=HBF_STOP_ID, results=25):
 def fetch_departures(stop_id=HBF_STOP_ID, results=25):
     return _station_board(stop_id, results, "DEP", "Richtung", "Abfahrt")
 
-st.sidebar.title("Ebenen")
-show_routes = st.sidebar.checkbox("Verkehrslinien", value=True)
+st.sidebar.title(tr("Ebenen", "Layers"))
+show_routes = st.sidebar.checkbox(tr("Verkehrslinien", "Public transport lines"), value=True, key="lyr_routes")
 show_routes_full = False
 if show_routes:
     legend_html = "".join(
@@ -304,117 +408,130 @@ if show_routes:
         for label, colour in ROUTE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-    show_transport = st.sidebar.checkbox("Haltestellen", value=True)
-    show_routes_full = st.sidebar.checkbox("Vollständige Linien (außerhalb Moabits)", value=False)
+    show_transport = st.sidebar.checkbox(tr("Haltestellen", "Stops"), value=True, key="lyr_stops")
+    show_routes_full = st.sidebar.checkbox(tr("Vollständige Linien (außerhalb Moabits)", "Full routes (beyond Moabit)"),
+                                           value=False, key="lyr_routes_full")
 else:
     show_transport = False
 st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-show_cycling = st.sidebar.checkbox("Radwege", value=False)
+show_cycling = st.sidebar.checkbox(tr("Radwege", "Cycle lanes"), value=False, key="lyr_cycling")
 if show_cycling:
     legend_html = "".join(
-        f'<span style="color:{colour}"><b>&#11834;</b></span> {label}<br>'
+        f'<span style="color:{colour}"><b>&#11834;</b></span> {trl(label)}<br>'
         for label, colour in CYCLE_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_bikeshare = st.sidebar.checkbox("Leihräder", value=False)
+show_bikeshare = st.sidebar.checkbox(tr("Leihräder", "Bike share"), value=False, key="lyr_bikeshare")
 if show_bikeshare:
     st.sidebar.markdown(
         "<small>"
-        '<span style="color:green">&#9679;</span> Räder verfügbar<br>'
-        '<span style="color:orange">&#9679;</span> Wenige Räder (1–2)<br>'
-        '<span style="color:red">&#9679;</span> Keine Räder'
+        f'<span style="color:green">&#9679;</span> {tr("Räder verfügbar", "Bikes available")}<br>'
+        f'<span style="color:orange">&#9679;</span> {tr("Wenige Räder (1–2)", "Few bikes (1–2)")}<br>'
+        f'<span style="color:red">&#9679;</span> {tr("Keine Räder", "No bikes")}'
         "</small>",
         unsafe_allow_html=True,
     )
 st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-show_wohnlagen = st.sidebar.checkbox("Wohnlagenkarte", value=False)
+show_wohnlagen = st.sidebar.checkbox(tr("Wohnlagenkarte", "Residential area rating"), value=False, key="lyr_wohnlagen")
 if show_wohnlagen:
     legend_html = "".join(
-        f'<span style="color:{v["colour"]}">&#9632;</span> {v["label"]}<br>'
+        f'<span style="color:{v["colour"]}">&#9632;</span> {trl(v["label"])}<br>'
         for v in [WOL_STYLE["gut"], WOL_STYLE["mittel"], WOL_STYLE["einfach"]]
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_amenities = st.sidebar.checkbox("Nahversorgung", value=False)
+show_amenities = st.sidebar.checkbox(tr("Nahversorgung", "Local amenities"), value=False, key="lyr_amenities")
 if show_amenities:
     legend_html = "".join(
-        f'<span style="color:{colour}">&#9632;</span> {label}<br>'
+        f'<span style="color:{colour}">&#9632;</span> {trl(label)}<br>'
         for label, colour in AMENITY_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-show_greenspaces = st.sidebar.checkbox("Grünflächen", value=False)
+show_greenspaces = st.sidebar.checkbox(tr("Grünflächen", "Green spaces"), value=False, key="lyr_greenspaces")
 if show_greenspaces:
     legend_html = "".join(
-        f'<span style="color:{colour}">&#9632;</span> {label}<br>'
+        f'<span style="color:{colour}">&#9632;</span> {trl(label)}<br>'
         for label, colour in GREEN_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
-show_trees = st.sidebar.checkbox("Bäume", value=False)
+show_trees = st.sidebar.checkbox(tr("Bäume", "Trees"), value=False, key="lyr_trees")
 if show_trees:
     legend_html = "".join(
-        f'<span style="color:{t["colour"]}">&#9679;</span> {t["label"]}<br>'
+        f'<span style="color:{t["colour"]}">&#9679;</span> {trl(t["label"])}<br>'
         for t in TREE_TYPES.values()
     )
     st.sidebar.markdown(
-        f"<small>{legend_html}Quelle: Baumbestand Berlin (GRIS)</small>",
+        f"<small>{legend_html}{tr('Quelle: Baumbestand Berlin (GRIS)', 'Source: Berlin tree register (GRIS)')}</small>",
         unsafe_allow_html=True,
     )
-show_airquality = st.sidebar.checkbox("Luftqualität", value=False)
-show_noise = st.sidebar.checkbox("Lärmkarte (2022)", value=False)
+show_airquality = st.sidebar.checkbox(tr("Luftqualität", "Air quality"), value=False, key="lyr_airquality")
+show_noise = st.sidebar.checkbox(tr("Lärmkarte (2022)", "Noise map (2022)"), value=False, key="lyr_noise")
 noise_layer = NOISE_WMS_LAYERS[("Gesamt", "24 h")]
 if show_noise:
-    noise_source = st.sidebar.radio("Quelle", ["Gesamt", "Straße", "Tram & U-Bahn"], key="noise_source")
-    noise_time   = st.sidebar.radio("Zeit", ["24 h", "Nacht"], horizontal=True, key="noise_time")
+    # Option values stay German (they key NOISE_WMS_LAYERS); only the display is translated.
+    noise_source = st.sidebar.radio(tr("Quelle", "Source"), ["Gesamt", "Straße", "Tram & U-Bahn"],
+                                    format_func=trl, key="noise_source")
+    noise_time   = st.sidebar.radio(tr("Zeit", "Time"), ["24 h", "Nacht"], format_func=trl,
+                                    horizontal=True, key="noise_time")
     noise_layer  = NOISE_WMS_LAYERS[(noise_source, noise_time)]
-    _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> (22–6 Uhr)"
+    _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> " + tr("(22–6 Uhr)", "(10 pm–6 am)")
     legend_html = "".join(
         f'<span style="color:{colour}">&#9632;</span> {band} dB(A)<br>'
         for band, colour in NOISE_LEGEND[noise_time]
     )
     st.sidebar.markdown(
-        f"<small>{_metric}<br>{legend_html}Quelle: Strategische Lärmkarten Berlin 2022</small>",
+        f"<small>{_metric}<br>{legend_html}"
+        f"{tr('Quelle: Strategische Lärmkarten Berlin 2022', 'Source: Berlin strategic noise maps 2022')}</small>",
         unsafe_allow_html=True,
     )
 
 # --- Tabs ---
-tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung", "Umwelt", "Kriminalität", "Über Moabit"])
+tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs([
+    tr("Karte", "Map"),
+    tr("Abfahrten Berlin Hbf", "Departures Berlin Hbf"),
+    tr("Ankünfte Berlin Hbf", "Arrivals Berlin Hbf"),
+    tr("Bevölkerung", "Population"),
+    tr("Umwelt", "Environment"),
+    tr("Kriminalität", "Crime"),
+    tr("Über Moabit", "About Moabit"),
+])
 
 # --- Map tab ---
 with tab_map:
     if show_transport:
-        with st.spinner("Lade ÖPNV-Daten..."):
+        with st.spinner(tr("Lade ÖPNV-Daten...", "Loading public transport data…")):
             stops = get_stops()
 
     if show_cycling:
-        with st.spinner("Lade Radwege..."):
+        with st.spinner(tr("Lade Radwege...", "Loading cycle lanes…")):
             lanes = get_lanes()
 
     if show_bikeshare:
-        with st.spinner("Lade Leihrad-Daten..."):
+        with st.spinner(tr("Lade Leihrad-Daten...", "Loading bike share data…")):
             bikeshare_stations = get_bikeshare_stations()
 
     if show_wohnlagen:
-        with st.spinner("Lade Wohnlagenkarte..."):
+        with st.spinner(tr("Lade Wohnlagenkarte...", "Loading residential area ratings…")):
             wohnlagen = get_wohnlagen()
 
     if show_greenspaces:
-        with st.spinner("Lade Grünflächen..."):
+        with st.spinner(tr("Lade Grünflächen...", "Loading green spaces…")):
             greenspaces = get_greenspaces()
 
     if show_trees:
-        with st.spinner("Lade Baumbestand..."):
+        with st.spinner(tr("Lade Baumbestand...", "Loading trees…")):
             trees = get_trees()
 
     if show_amenities:
-        with st.spinner("Lade Nahversorgung..."):
+        with st.spinner(tr("Lade Nahversorgung...", "Loading local amenities…")):
             amenities = get_amenities()
 
     if show_routes:
         if show_routes_full:
-            with st.spinner("Lade vollständige Linien..."):
+            with st.spinner(tr("Lade vollständige Linien...", "Loading full routes…")):
                 routes = get_routes_full()
         else:
-            with st.spinner("Lade Verkehrslinien..."):
+            with st.spinner(tr("Lade Verkehrslinien...", "Loading public transport lines…")):
                 routes = get_routes()
 
     if "map_center" not in st.session_state:
@@ -461,15 +578,22 @@ with tab_map:
     ).add_to(m)
 
     if show_greenspaces:
+        # Tooltip shows a translated label rather than the raw OSM value in "type".
+        _green_features = [
+            {**f, "properties": {**f["properties"],
+                                 "type_label": trl(GREEN_TYPE_LABELS.get(f["properties"].get("type", ""),
+                                                                         f["properties"].get("type", "")))}}
+            for f in greenspaces
+        ]
         folium.GeoJson(
-            {"type": "FeatureCollection", "features": greenspaces},
+            {"type": "FeatureCollection", "features": _green_features},
             style_function=lambda f: FEATURE_STYLE.get(
                 f["properties"].get("type", ""),
                 {"color": "#43A047", "fillColor": "#43A047", "fillOpacity": 0.3, "weight": 1}
             ),
             tooltip=folium.GeoJsonTooltip(
-                fields=["name", "type"],
-                aliases=["Name:", "Typ:"],
+                fields=["name", "type_label"],
+                aliases=["Name:", tr("Typ:", "Type:")],
             ),
         ).add_to(m)
 
@@ -477,7 +601,7 @@ with tab_map:
         for feature in amenities:
             amenity = feature["amenity"]
             style = AMENITY_STYLE.get(amenity, {"colour": "#888888", "label": amenity})
-            name = feature["name"] or style["label"]
+            name = feature["name"] or trl(style["label"])
             tooltip = f"{name}<br>{feature['address']}" if feature["address"] else name
             folium.CircleMarker(
                 location=[feature["lat"], feature["lon"]],
@@ -506,7 +630,7 @@ with tab_map:
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=["ref", "name"],
-                aliases=["Linie:", "Route:"],
+                aliases=[tr("Linie:", "Line:"), "Route:"],
             ),
         ).add_to(m)
 
@@ -522,7 +646,7 @@ with tab_map:
                 "geometry": {"type": "LineString", "coordinates": coords},
                 "properties": {
                     "color": lane_style(tags),
-                    "name": tags.get("name", tags.get("cycleway", "Radweg")),
+                    "name": tags.get("name") or tr("Radweg", "Cycle lane"),
                 }
             })
         folium.GeoJson(
@@ -532,7 +656,7 @@ with tab_map:
                 "weight":  3,
                 "opacity": 0.8,
             },
-            tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Radweg:"]),
+            tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=[tr("Radweg:", "Cycle lane:")]),
         ).add_to(m)
 
     if show_bikeshare:
@@ -543,9 +667,9 @@ with tab_map:
                 tooltip=folium.Tooltip(
                     f"<span style='font-size:15px'>"
                     f"<b>{station['name']}</b><br>"
-                    f"Fahrräder verfügbar: {station['bikes']}<br>"
-                    f"Stellplätze frei: {station['docks']}<br>"
-                    f"Kapazität: {station['capacity']}"
+                    f"{tr('Fahrräder verfügbar', 'Bikes available')}: {station['bikes']}<br>"
+                    f"{tr('Stellplätze frei', 'Free docks')}: {station['docks']}<br>"
+                    f"{tr('Kapazität', 'Capacity')}: {station['capacity']}"
                     f"</span>"
                 ),
             ).add_to(m)
@@ -553,8 +677,14 @@ with tab_map:
     if show_wohnlagen:
         wol_colours = {k: v["colour"] for k, v in WOL_STYLE.items()}
 
+        _wol_features = [
+            {**f, "properties": {**f["properties"],
+                                 "wol_label": trl(WOL_STYLE.get(f["properties"].get("wol", ""), {}).get(
+                                     "label", f["properties"].get("wol", "")))}}
+            for f in wohnlagen
+        ]
         folium.GeoJson(
-            {"type": "FeatureCollection", "features": wohnlagen},
+            {"type": "FeatureCollection", "features": _wol_features},
             style_function=lambda feature: {
                 "radius": 4,
                 "color": wol_colours.get(feature["properties"].get("wol", ""), "#888888"),
@@ -564,8 +694,8 @@ with tab_map:
             },
             marker=folium.CircleMarker(radius=4, weight=0, fill=True, fill_opacity=0.7),
             tooltip=folium.GeoJsonTooltip(
-                fields=["strasse", "hnr", "wol"],
-                aliases=["Straße:", "Nr.:", "Wohnlage:"],
+                fields=["strasse", "hnr", "wol_label"],
+                aliases=[tr("Straße:", "Street:"), tr("Nr.:", "No.:"), tr("Wohnlage:", "Rating:")],
             ),
         ).add_to(m)
 
@@ -584,10 +714,10 @@ with tab_map:
         st.session_state.selected_stop = None
 
     if show_airquality:
-        with st.spinner("Lade Luftqualitätsdaten..."):
+        with st.spinner(tr("Lade Luftqualitätsdaten...", "Loading air quality data…")):
             aq_current = get_airquality_current()
         readings = "<br>".join(
-            f"{label}: {v['value']} {v['unit']}"
+            f"{label}: {_fmt_float(v['value']) if isinstance(v['value'], float) else v['value']} {v['unit']}"
             for label, v in aq_current.items()
         )
         folium.Marker(
@@ -606,7 +736,7 @@ with tab_map:
                 tooltip=folium.Tooltip(
                     "<span style='font-size:15px'>"
                     "<b>" + s['name'] + "</b>"
-                    "<br>" + s['years'] + " · Keine Daten verfügbar"
+                    "<br>" + s['years'] + " · " + tr("Keine Daten verfügbar", "No data available") +
                     "</span>"
                 ),
             ).add_to(m)
@@ -620,7 +750,7 @@ with tab_map:
             fmt="image/png",
             transparent=True,
             version="1.3.0",
-            attr="Strategische Lärmkarten Berlin 2022",
+            attr=tr("Strategische Lärmkarten Berlin 2022", "Berlin strategic noise maps 2022"),
             opacity=0.7,
         ).add_to(m)
 
@@ -630,7 +760,11 @@ with tab_map:
         # the markers in the browser, which stays responsive where one Python
         # folium.Marker per tree would not. Row layout: layers.trees.FIELDS.
         _tree_colours = json.dumps({k: v["colour"] for k, v in TREE_TYPES.items()})
-        _tree_labels = json.dumps({k: v["label"] for k, v in TREE_TYPES.items()}, ensure_ascii=False)
+        _tree_labels = json.dumps({k: trl(v["label"]) for k, v in TREE_TYPES.items()}, ensure_ascii=False)
+        _tw = {
+            "planted": tr("Gepflanzt", "Planted"), "years": tr("Jahre", "years"),
+            "height": tr("Höhe", "Height"), "trunk": tr("Stamm", "Girth"), "crown": tr("Krone", "Crown"),
+        }
         _tree_callback = (
             "function (row) {"
             "  var esc = function (v) { return String(v).replace(/[&<>\"]/g, function (c) {"
@@ -641,11 +775,11 @@ with tab_map:
             "    {radius: 5, color: c, fillColor: c, fillOpacity: 0.85, weight: 1});"
             "  var h = '<span style=\"font-size:14px\"><b>' + esc(row[3]) + '</b>';"
             "  if (row[4]) h += '<br><i>' + esc(row[4]) + '</i>';"
-            "  if (row[5]) h += '<br>Gepflanzt ' + row[5] + ' (' + (new Date().getFullYear() - row[5]) + ' Jahre)';"
+            f"  if (row[5]) h += '<br>{_tw['planted']} ' + row[5] + ' (' + (new Date().getFullYear() - row[5]) + ' {_tw['years']})';"
             "  var dims = [];"
-            "  if (row[6]) dims.push('Höhe ' + row[6] + ' m');"
-            "  if (row[7]) dims.push('Stamm ' + row[7] + ' cm');"
-            "  if (row[8]) dims.push('Krone ' + row[8] + ' m');"
+            f"  if (row[6]) dims.push('{_tw['height']} ' + row[6] + ' m');"
+            f"  if (row[7]) dims.push('{_tw['trunk']} ' + row[7] + ' cm');"
+            f"  if (row[8]) dims.push('{_tw['crown']} ' + row[8] + ' m');"
             "  if (dims.length) h += '<br>' + dims.join(' · ');"
             "  if (row[9]) h += '<br>' + esc(row[9]) + (row[10] ? ' ' + esc(row[10]) : '');"
             "  h += '<br><small>' + labels[row[2]] + '</small></span>';"
@@ -667,14 +801,17 @@ with tab_map:
             "}"
         )
         FastMarkerCluster(
-            data=trees,
+            data=[r[:3] + [tr_species(r[3])] + r[4:] for r in trees] if LANG == "en" else trees,
             callback=_tree_callback,
             icon_create_function=_tree_cluster_icon,
             options={"disableClusteringAtZoom": 18, "chunkedLoading": True, "showCoverageOnHover": False},
             name="Bäume",
         ).add_to(m)
 
-    LocateControl(auto_start=False).add_to(m)
+    LocateControl(
+        auto_start=False,
+        strings={"title": tr("Meinen Standort anzeigen", "Show my location")},
+    ).add_to(m)
 
     map_data = st_folium(
         m,
@@ -702,36 +839,38 @@ with tab_map:
 
     if show_transport and st.session_state.selected_stop:
         sel = st.session_state.selected_stop
-        st.markdown(f"**{sel['name']}** – nächste Abfahrten")
-        with st.spinner("Lade Abfahrtsdaten..."):
+        st.markdown(f"**{sel['name']}** – {tr('nächste Abfahrten', 'next departures')}")
+        with st.spinner(tr("Lade Abfahrtsdaten...", "Loading departures…")):
             try:
                 rows = fetch_departures(stop_id=sel["id"], results=12)
             except Exception as e:
                 rows = []
-                st.error(f"Abfahrtsdaten konnten nicht geladen werden: {e}")
+                st.error(tr("Abfahrtsdaten konnten nicht geladen werden", "Could not load departures") + f": {e}")
         if not rows:
-            st.caption("Keine Abfahrtsdaten für diese Haltestelle verfügbar.")
+            st.caption(tr("Keine Abfahrtsdaten für diese Haltestelle verfügbar.",
+                          "No departure data available for this stop."))
         else:
             if _is_mobile:
                 df_stop = pd.DataFrame([
-                    {"Linie": r["Linie"], "Richtung": r["Richtung"], "Abfahrt": r["Abfahrt"], "Versp.": r["Verspätung"]}
+                    {tr("Linie", "Line"): r["Linie"], tr("Richtung", "Destination"): r["Richtung"],
+                     tr("Abfahrt", "Departs"): r["Abfahrt"], tr("Versp.", "Delay"): _tr_delay(r["Verspätung"])}
                     for r in rows
                 ])
                 st.table(df_stop)
             else:
                 st.dataframe(
-                    rows,
-                    use_container_width=True,
+                    [{**r, "Verspätung": _tr_delay(r["Verspätung"])} for r in rows],
+                    width="stretch",
                     hide_index=True,
                     height="content",
                     column_order=["Icon", "Linie", "Typ", "Richtung", "Abfahrt", "Verspätung"],
                     column_config={
                         "Icon":       st.column_config.ImageColumn("", width="small"),
-                        "Linie":      st.column_config.TextColumn("Linie",      width="small"),
-                        "Typ":        st.column_config.TextColumn("Typ",        width="small"),
-                        "Richtung":   st.column_config.TextColumn("Richtung"),
-                        "Abfahrt":    st.column_config.TextColumn("Abfahrt",    width="small"),
-                        "Verspätung": st.column_config.TextColumn("Verspätung", width="small"),
+                        "Linie":      st.column_config.TextColumn(tr("Linie", "Line"),             width="small"),
+                        "Typ":        st.column_config.TextColumn(tr("Typ", "Type"),               width="small"),
+                        "Richtung":   st.column_config.TextColumn(tr("Richtung", "Destination")),
+                        "Abfahrt":    st.column_config.TextColumn(tr("Abfahrt", "Departs"),        width="small"),
+                        "Verspätung": st.column_config.TextColumn(tr("Verspätung", "Delay"),       width="small"),
                     },
                 )
 
@@ -740,24 +879,25 @@ with tab_demographics:
     trend = get_population_over_time()
 
     _latest_year = int(trend.iloc[-1]["year"]) if not trend.empty else 2025
-    st.caption(f"Quelle: Amt für Statistik Berlin-Brandenburg, Einwohnerregisterstatistik 31.12.{_latest_year}")
+    st.caption(tr(f"Quelle: Amt für Statistik Berlin-Brandenburg, Einwohnerregisterstatistik 31.12.{_latest_year}",
+                  f"Source: Statistical Office for Berlin-Brandenburg, population register, 31 December {_latest_year}"))
 
     # --- Headline metrics ---
     if not trend.empty:
         latest = trend.iloc[-1]
         if _is_mobile:
             _metrics_2col([
-                {"label": "Einwohner",          "value": _fmt_int(latest['total'])},
-                {"label": "Frauenanteil",        "value": _fmt_pct(latest['female_pct'])},
-                {"label": "Ausländeranteil",     "value": _fmt_pct(latest['foreign_pct'])},
-                {"label": "18- bis 44-Jährige", "value": _fmt_pct(latest['young_adult_pct'])},
+                {"label": tr("Einwohner", "Residents"),                  "value": _fmt_int(latest['total'])},
+                {"label": tr("Frauenanteil", "Share of women"),          "value": _fmt_pct(latest['female_pct'])},
+                {"label": tr("Ausländeranteil", "Foreign nationals"),     "value": _fmt_pct(latest['foreign_pct'])},
+                {"label": tr("18- bis 44-Jährige", "Aged 18 to 44"),     "value": _fmt_pct(latest['young_adult_pct'])},
             ])
         else:
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Einwohner",          _fmt_int(latest['total']))
-            col2.metric("Frauenanteil",        _fmt_pct(latest['female_pct']))
-            col3.metric("Ausländeranteil",     _fmt_pct(latest['foreign_pct']))
-            col4.metric("18- bis 44-Jährige", _fmt_pct(latest['young_adult_pct']))
+            col1.metric(tr("Einwohner", "Residents"),              _fmt_int(latest['total']))
+            col2.metric(tr("Frauenanteil", "Share of women"),      _fmt_pct(latest['female_pct']))
+            col3.metric(tr("Ausländeranteil", "Foreign nationals"), _fmt_pct(latest['foreign_pct']))
+            col4.metric(tr("18- bis 44-Jährige", "Aged 18 to 44"), _fmt_pct(latest['young_adult_pct']))
 
     st.divider()
 
@@ -767,12 +907,12 @@ with tab_demographics:
         col_sel, _ = st.columns([1, 3])
         with col_sel:
             selected_age_year = st.selectbox(
-                "Jahr", options=age_years, index=len(age_years) - 1,
+                tr("Jahr", "Year"), options=age_years, index=len(age_years) - 1,
                 key="age_year"
             )
         age_row = trend[trend["year"] == selected_age_year].iloc[0]
         age_data = {
-            "unter 6":  int(age_row["u6"]),
+            tr("unter 6", "under 6"):  int(age_row["u6"]),
             "6–14":     int(age_row["6_15"]),
             "15–17":    int(age_row["15_18"]),
             "18–26":    int(age_row["18_27"]),
@@ -792,7 +932,7 @@ with tab_demographics:
         col_age, col_pop = st.columns(2)
 
     with col_age:
-        st.subheader(f"Bevölkerung nach Altersgruppe ({title_year})")
+        st.subheader(tr("Bevölkerung nach Altersgruppe", "Population by age group") + f" ({title_year})")
         if _is_mobile:
             fig_age = go.Figure(go.Bar(
                 x=list(age_data.keys()),
@@ -805,8 +945,8 @@ with tab_demographics:
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
-                xaxis_title="Altersgruppe",
-                yaxis_title="Bevölkerung",
+                xaxis_title=tr("Altersgruppe", "Age group"),
+                yaxis_title=tr("Bevölkerung", "Population"),
                 margin=dict(t=20, b=20),
                 height=320,
             )
@@ -823,20 +963,20 @@ with tab_demographics:
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
-                xaxis_title="Bevölkerung",
-                yaxis_title="Altersgruppe",
+                xaxis_title=tr("Bevölkerung", "Population"),
+                yaxis_title=tr("Altersgruppe", "Age group"),
                 margin=dict(t=20, b=20, r=60),
             )
-        st.plotly_chart(fig_age, use_container_width=True, config=_plot_config)
+        st.plotly_chart(fig_age, width="stretch", config=_plot_config)
 
     _yr0, _yr1 = "–", "–"
     with col_pop:
         if not trend.empty:
             first, last = trend.iloc[0]["total"], trend.iloc[-1]["total"]
             pct = (last - first) / first * 100
-            direction = "Anstieg" if pct > 0 else "Rückgang"
+            direction = tr("Anstieg", "An increase") if pct > 0 else tr("Rückgang", "A decrease")
             _yr0, _yr1 = int(trend.iloc[0]["year"]), int(trend.iloc[-1]["year"])
-            st.subheader(f"Bevölkerungsentwicklung {_yr0}–{_yr1}")
+            st.subheader(tr("Bevölkerungsentwicklung", "Population trend") + f" {_yr0}–{_yr1}")
             fig_pop = go.Figure(go.Scatter(
                 x=trend["year"], y=trend["total"],
                 mode="lines+markers+text",
@@ -851,16 +991,22 @@ with tab_demographics:
                 paper_bgcolor="rgba(0,0,0,0)",
                 yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
                 xaxis=dict(tickmode="linear", dtick=1),
-                xaxis_title="Jahr",
-                yaxis_title="Bevölkerung",
+                xaxis_title=tr("Jahr", "Year"),
+                yaxis_title=tr("Bevölkerung", "Population"),
                 margin=dict(t=20, b=20),
             )
-            st.plotly_chart(fig_pop, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_pop, width="stretch", config=_plot_config)
             st.caption(
-                f"{direction} um {_fmt_pct(abs(pct))} zwischen {_yr0} ({_fmt_int(first)} Einwohner) "
-                f"und {_yr1} ({_fmt_int(last)} Einwohner). "
-                "Die Zeitreihe beginnt 2021, da Berlins LOR-Planungsraumbezirke am 1. Januar 2021 "
-                "neu strukturiert wurden und ältere Daten für Moabits Planungsräume nicht vergleichbar sind."
+                tr(
+                    f"{direction} um {_fmt_pct(abs(pct))} zwischen {_yr0} ({_fmt_int(first)} Einwohner) "
+                    f"und {_yr1} ({_fmt_int(last)} Einwohner). "
+                    "Die Zeitreihe beginnt 2021, da Berlins LOR-Planungsraumbezirke am 1. Januar 2021 "
+                    "neu strukturiert wurden und ältere Daten für Moabits Planungsräume nicht vergleichbar sind.",
+                    f"{direction} of {_fmt_pct(abs(pct))} between {_yr0} ({_fmt_int(first)} residents) "
+                    f"and {_yr1} ({_fmt_int(last)} residents). "
+                    "The series starts in 2021 because Berlin's LOR planning areas were restructured on "
+                    "1 January 2021, so older figures for Moabit's planning areas are not comparable."
+                )
             )
 
     if not trend.empty:
@@ -873,9 +1019,9 @@ with tab_demographics:
 
         # --- Age structure shift (stacked bar) ---
         with col_stack:
-            st.subheader("Altersstruktur im Zeitverlauf")
+            st.subheader(tr("Altersstruktur im Zeitverlauf", "Age structure over time"))
             age_cols = {
-                "unter 6":  ("u6",     "#FFB300", 8),
+                tr("unter 6", "under 6"):  ("u6",     "#FFB300", 8),
                 "6–14":     ("6_15",   "#7CB342", 7),
                 "15–17":    ("15_18",  "#43A047", 6),
                 "18–26":    ("18_27",  "#1E88E5", 5),
@@ -899,27 +1045,27 @@ with tab_demographics:
                 paper_bgcolor="rgba(0,0,0,0)",
                 yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
                 xaxis=dict(tickmode="linear", dtick=1),
-                xaxis_title="Jahr",
-                yaxis_title="Bevölkerung",
+                xaxis_title=tr("Jahr", "Year"),
+                yaxis_title=tr("Bevölkerung", "Population"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=420,
             )
-            st.plotly_chart(fig_stack, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_stack, width="stretch", config=_plot_config)
 
         # --- Population composition over time ---
         with col_comp:
-            st.subheader(f"Bevölkerungszusammensetzung (%, {_yr0}–{_yr1})")
+            st.subheader(tr("Bevölkerungszusammensetzung", "Population composition") + f" (%, {_yr0}–{_yr1})")
             mig_trend = get_migration_over_time()
             fig_ratios = go.Figure()
             ratio_series = {
-                "Mit Migrationshintergrund":    (mig_trend,  "with_mig_bg_pct",  "#C0504D"),
-                "Ausländer/innen":              (mig_trend,  "foreign_pct",       "#FB8C00"),
-                "Deutsche mit MH":              (mig_trend,  "german_mig_pct",    "#6D4C41"),
-                "Deutsche ohne MH":             (mig_trend,  "german_no_mig_pct", "#43A047"),
-                "18- bis 44-Jährige":           (trend,      "young_adult_pct",   "#1E88E5"),
-                "unter 18":                     (trend,      "u18_pct",           "#FFB300"),
-                "55 und älter":                 (trend,      "senior_pct",        "#546E7A"),
+                tr("Mit Migrationshintergrund", "With migration background"): (mig_trend, "with_mig_bg_pct",   "#C0504D"),
+                tr("Ausländer/innen", "Foreign nationals"):                   (mig_trend, "foreign_pct",       "#FB8C00"),
+                tr("Deutsche mit MH", "Germans with migration background"):   (mig_trend, "german_mig_pct",    "#6D4C41"),
+                tr("Deutsche ohne MH", "Germans without migration background"): (mig_trend, "german_no_mig_pct", "#43A047"),
+                tr("18- bis 44-Jährige", "Aged 18 to 44"):                    (trend,     "young_adult_pct",   "#1E88E5"),
+                tr("unter 18", "under 18"):                                   (trend,     "u18_pct",           "#FFB300"),
+                tr("55 und älter", "55 and over"):                            (trend,     "senior_pct",        "#546E7A"),
             }
             for label, (df, col, color) in ratio_series.items():
                 if df.empty or col not in df.columns:
@@ -937,36 +1083,42 @@ with tab_demographics:
                 yaxis=dict(
                     showgrid=True,
                     gridcolor="rgba(255,255,255,0.1)",
-                    ticksuffix=" %",
+                    ticksuffix=tr(" %", "%"),
                 ),
                 xaxis=dict(tickmode="linear", dtick=1),
-                xaxis_title="Jahr",
+                xaxis_title=tr("Jahr", "Year"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=60, b=20),
                 height=420,
             )
-            st.plotly_chart(fig_ratios, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_ratios, width="stretch", config=_plot_config)
             st.caption(
-                "Migrationshintergrund umfasst sowohl Ausländer/innen als auch Deutsche, "
-                "die selbst oder deren Eltern nach Deutschland zugewandert sind."
+                tr("Migrationshintergrund umfasst sowohl Ausländer/innen als auch Deutsche, "
+                   "die selbst oder deren Eltern nach Deutschland zugewandert sind.",
+                   "Migration background covers both foreign nationals and Germans "
+                   "who themselves, or whose parents, moved to Germany.")
             )
 
     # --- Nationality breakdown over time ---
     nat_trend = get_nationality_over_time()
     if not nat_trend.empty:
         st.divider()
-        st.subheader(f"Einwohner/innen mit Migrationshintergrund nach Herkunft ({_yr0}–{_yr1})")
+        st.subheader(tr("Einwohner/innen mit Migrationshintergrund nach Herkunft",
+                        "Residents with a migration background by origin") + f" ({_yr0}–{_yr1})")
         st.caption(
-            "Einzelne Länder-/Regionenzählungen aus T4-Tabelle. "
-            "Kategorien sind auf dieser Ebene nicht überlappend. "
-            "Einige Länder erscheinen nur in bestimmten Jahren aufgrund von Berichtsänderungen."
+            tr("Einzelne Länder-/Regionenzählungen aus T4-Tabelle. "
+               "Kategorien sind auf dieser Ebene nicht überlappend. "
+               "Einige Länder erscheinen nur in bestimmten Jahren aufgrund von Berichtsänderungen.",
+               "Individual country/region counts from table T4. "
+               "Categories do not overlap at this level. "
+               "Some countries appear only in certain years because of changes in reporting.")
         )
 
         # Year selector
         years = sorted(nat_trend["year"].tolist())
         col_sel, _ = st.columns([1, 3])
         with col_sel:
-            selected_year = st.selectbox("Jahr", options=years, index=len(years) - 1, key="nat_year")
+            selected_year = st.selectbox(tr("Jahr", "Year"), options=years, index=len(years) - 1, key="nat_year")
         row = nat_trend[nat_trend["year"] == selected_year].iloc[0]
         nat_data = {
             col: int(row[col])
@@ -983,11 +1135,14 @@ with tab_demographics:
 
         # Donut for selected year
         with col_left:
-            st.markdown(f"**Zusammensetzung {selected_year}**")
+            st.markdown("**" + tr("Zusammensetzung", "Composition") + f" {selected_year}**")
+            # Slices in alphabetical order of the displayed (language-specific) name;
+            # colours stay keyed by the English data key.
+            _donut_keys = sorted(sorted_nat, key=tr_country)
             fig_donut = go.Figure(go.Pie(
-                labels=list(sorted_nat.keys()),
-                values=list(sorted_nat.values()),
-                marker=dict(colors=[COUNTRY_COLOURS.get(k, "#CCCCCC") for k in sorted_nat]),
+                labels=[tr_country(k) for k in _donut_keys],
+                values=[sorted_nat[k] for k in _donut_keys],
+                marker=dict(colors=[COUNTRY_COLOURS.get(k, "#CCCCCC") for k in _donut_keys]),
                 hole=0.45,
                 textinfo="label+percent",
                 textposition="outside",
@@ -999,24 +1154,24 @@ with tab_demographics:
                 margin=dict(t=80, b=80, l=80, r=80),
                 height=560,
             )
-            st.plotly_chart(fig_donut, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_donut, width="stretch", config=_plot_config)
 
         # Top nationalities trend lines
         with col_right:
-            st.markdown("**Wichtigste Nationalitäten im Zeitverlauf**")
+            st.markdown("**" + tr("Wichtigste Nationalitäten im Zeitverlauf", "Main nationalities over time") + "**")
             # Pick top 8 by latest year value
             latest = nat_trend[nat_trend["year"] == max(years)].iloc[0]
             nat_cols = [c for c in nat_trend.columns if c != "year"]
             top_cols = sorted(nat_cols, key=lambda c: latest.get(c, 0), reverse=True)[:8]
 
             fig_trend = go.Figure()
-            for col in sorted(top_cols):
+            for col in sorted(top_cols, key=tr_country):
                 colour = COUNTRY_COLOURS.get(col, "#CCCCCC")
                 fig_trend.add_trace(go.Scatter(
                     x=nat_trend["year"],
                     y=nat_trend[col],
                     mode="lines+markers",
-                    name=col,
+                    name=tr_country(col),
                     line=dict(color=colour, width=2),
                     marker=dict(size=6, color=colour),
                 ))
@@ -1025,26 +1180,33 @@ with tab_demographics:
                 plot_bgcolor="rgba(0,0,0,0)",
                 yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
                 xaxis=dict(tickmode="linear", dtick=1),
-                xaxis_title="Jahr",
-                yaxis_title="Bevölkerung",
+                xaxis_title=tr("Jahr", "Year"),
+                yaxis_title=tr("Bevölkerung", "Population"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=480,
             )
-            st.plotly_chart(fig_trend, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_trend, width="stretch", config=_plot_config)
 
         st.caption(
-            "**Hinweis zu Berichtsänderungen:** Die Ausgabe 2025 hat die T4-Ländergliederung umstrukturiert. "
-            "Mehrere aggregierte Gruppen aus 2021–2024 (islamische/OIC-Länder, arabische Länder, "
-            "ehemaliges Jugoslawien, ehemalige Sowjetunion) wurden durch einzelne Länderspalten ersetzt, "
-            "darunter neue Einträge für Afghanistan, Irak, China und Indien. "
-            "Zahlen für Syrien, Iran und einige andere Länder sind daher über die Grenze 2024–2025 "
-            "nicht direkt vergleichbar."
+            tr("**Hinweis zu Berichtsänderungen:** Die Ausgabe 2025 hat die T4-Ländergliederung umstrukturiert. "
+               "Mehrere aggregierte Gruppen aus 2021–2024 (islamische/OIC-Länder, arabische Länder, "
+               "ehemaliges Jugoslawien, ehemalige Sowjetunion) wurden durch einzelne Länderspalten ersetzt, "
+               "darunter neue Einträge für Afghanistan, Irak, China und Indien. "
+               "Zahlen für Syrien, Iran und einige andere Länder sind daher über die Grenze 2024–2025 "
+               "nicht direkt vergleichbar.",
+               "**Note on reporting changes:** the 2025 edition restructured the T4 country breakdown. "
+               "Several aggregate groups used in 2021–2024 (Islamic/OIC countries, Arab countries, "
+               "former Yugoslavia, former Soviet Union) were replaced by individual country columns, "
+               "including new entries for Afghanistan, Iraq, China and India. "
+               "Figures for Syria, Iran and some other countries are therefore not directly comparable "
+               "across the 2024–2025 boundary.")
         )
 
     # --- IBB asking rent trend ---
     st.divider()
-    st.subheader("Angebotsmieten nach Bezirk 2008–2025 (€/m², netto kalt)")
+    st.subheader(tr("Angebotsmieten nach Bezirk 2008–2025 (€/m², netto kalt)",
+                    "Asking rents by district 2008–2025 (€/m², net of service charges)"))
 
     fig_rent = go.Figure()
     for bezirk in sorted(ASKING_RENTS):
@@ -1076,105 +1238,114 @@ with tab_demographics:
         margin=dict(t=60, b=20),
         height=520,
     )
-    st.plotly_chart(fig_rent, use_container_width=True, config=_plot_config)
+    st.plotly_chart(fig_rent, width="stretch", config=_plot_config)
     st.caption(
-        "Moabit gehört zum Bezirk Mitte (rote Linie) – keine moabitspezifischen Mietdaten verfügbar. "
-        "Berliner Median als gestrichelte graue Linie. "
-        "Frühe Datenpunkte verwenden überlappende Berichtszeiträume (z. B. 2008/09 → 2009); "
-        "keine Daten für 2011 und 2014. "
-        "Quelle: IBB Wohnungsmarktbericht 2008–2025, Tabellenbände, netto kalt."
+        tr("Moabit gehört zum Bezirk Mitte (rote Linie) – keine moabitspezifischen Mietdaten verfügbar. "
+           "Berliner Median als gestrichelte graue Linie. "
+           "Frühe Datenpunkte verwenden überlappende Berichtszeiträume (z. B. 2008/09 → 2009); "
+           "keine Daten für 2011 und 2014. "
+           "Quelle: IBB Wohnungsmarktbericht 2008–2025, Tabellenbände, netto kalt.",
+           "Moabit is part of the Mitte district (red line); no rent data is published for Moabit itself. "
+           "Berlin median as a dashed grey line. "
+           "Early data points use overlapping reporting periods (e.g. 2008/09 → 2009); "
+           "no data for 2011 and 2014. "
+           "Source: IBB Housing Market Report 2008–2025, table volumes, net of service charges.")
     )
 
 # --- Departures tab ---
 with tab_departures:
     col_title, col_btn = st.columns([8, 1])
-    col_title.subheader("Abfahrten Berlin Hauptbahnhof")
-    if col_btn.button("Aktualisieren", use_container_width=True, key="btn_departures"):
+    col_title.subheader(tr("Abfahrten Berlin Hauptbahnhof", "Departures Berlin Hauptbahnhof"))
+    if col_btn.button(tr("Aktualisieren", "Refresh"), width="stretch", key="btn_departures"):
         st.rerun()
-    with st.spinner("Lade Abfahrtsdaten..."):
+    with st.spinner(tr("Lade Abfahrtsdaten...", "Loading departures…")):
         try:
             rows = fetch_departures()
         except Exception as e:
-            st.error(f"Abfahrtsdaten konnten nicht geladen werden: {e}")
+            st.error(tr("Abfahrtsdaten konnten nicht geladen werden", "Could not load departures") + f": {e}")
             rows = []
     if rows:
         _dep_cols = ["Icon", "Linie", "Richtung", "Gleis", "Abfahrt", "Verspätung"] if _is_mobile else ["Icon", "Linie", "Typ", "Richtung", "Gleis", "Abfahrt", "Verspätung"]
         st.dataframe(
-            rows,
-            use_container_width=True,
+            [{**r, "Verspätung": _tr_delay(r["Verspätung"])} for r in rows],
+            width="stretch",
             hide_index=True,
             height="content",
             column_order=_dep_cols,
             column_config={
                 "Icon":       st.column_config.ImageColumn("", width="small"),
-                "Linie":      st.column_config.TextColumn("Linie",                                        width="small"),
-                "Typ":        st.column_config.TextColumn("Typ",                                          width="small"),
-                "Richtung":   st.column_config.TextColumn("Richtung"),
-                "Gleis":      st.column_config.TextColumn("Gleis",                                        width="small"),
-                "Abfahrt":    st.column_config.TextColumn("Abfahrt",                                      width="small"),
-                "Verspätung": st.column_config.TextColumn("Verspätung" if not _is_mobile else "Versp.",   width="small"),
+                "Linie":      st.column_config.TextColumn(tr("Linie", "Line"),                 width="small"),
+                "Typ":        st.column_config.TextColumn(tr("Typ", "Type"),                   width="small"),
+                "Richtung":   st.column_config.TextColumn(tr("Richtung", "Destination")),
+                "Gleis":      st.column_config.TextColumn(tr("Gleis", "Platform"),             width="small"),
+                "Abfahrt":    st.column_config.TextColumn(tr("Abfahrt", "Departs"),            width="small"),
+                "Verspätung": st.column_config.TextColumn(
+                    tr("Verspätung", "Delay") if not _is_mobile else tr("Versp.", "Delay"), width="small"),
             },
         )
     else:
-        st.info("Keine Abfahrten gefunden.")
+        st.info(tr("Keine Abfahrten gefunden.", "No departures found."))
 
 with tab_arrivals:
     col_title, col_btn = st.columns([8, 1])
-    col_title.subheader("Ankünfte Berlin Hauptbahnhof")
-    if col_btn.button("Aktualisieren", use_container_width=True, key="btn_arrivals"):
+    col_title.subheader(tr("Ankünfte Berlin Hauptbahnhof", "Arrivals Berlin Hauptbahnhof"))
+    if col_btn.button(tr("Aktualisieren", "Refresh"), width="stretch", key="btn_arrivals"):
         st.rerun()
-    with st.spinner("Lade Ankunftsdaten..."):
+    with st.spinner(tr("Lade Ankunftsdaten...", "Loading arrivals…")):
         try:
             rows = fetch_arrivals()
         except Exception as e:
-            st.error(f"Ankunftsdaten konnten nicht geladen werden: {e}")
+            st.error(tr("Ankunftsdaten konnten nicht geladen werden", "Could not load arrivals") + f": {e}")
             rows = []
     if rows:
         _arr_cols = ["Icon", "Linie", "Herkunft", "Gleis", "Ankunft", "Verspätung"] if _is_mobile else ["Icon", "Linie", "Typ", "Herkunft", "Gleis", "Ankunft", "Verspätung"]
         st.dataframe(
-            rows,
-            use_container_width=True,
+            [{**r, "Verspätung": _tr_delay(r["Verspätung"])} for r in rows],
+            width="stretch",
             hide_index=True,
             height="content",
             column_order=_arr_cols,
             column_config={
                 "Icon":       st.column_config.ImageColumn("", width="small"),
-                "Linie":      st.column_config.TextColumn("Linie",                                        width="small"),
-                "Typ":        st.column_config.TextColumn("Typ",                                          width="small"),
-                "Herkunft":   st.column_config.TextColumn("Herkunft"),
-                "Gleis":      st.column_config.TextColumn("Gleis",                                        width="small"),
-                "Ankunft":    st.column_config.TextColumn("Ankunft",                                      width="small"),
-                "Verspätung": st.column_config.TextColumn("Verspätung" if not _is_mobile else "Versp.",   width="small"),
+                "Linie":      st.column_config.TextColumn(tr("Linie", "Line"),                 width="small"),
+                "Typ":        st.column_config.TextColumn(tr("Typ", "Type"),                   width="small"),
+                "Herkunft":   st.column_config.TextColumn(tr("Herkunft", "Origin")),
+                "Gleis":      st.column_config.TextColumn(tr("Gleis", "Platform"),             width="small"),
+                "Ankunft":    st.column_config.TextColumn(tr("Ankunft", "Arrives"),            width="small"),
+                "Verspätung": st.column_config.TextColumn(
+                    tr("Verspätung", "Delay") if not _is_mobile else tr("Versp.", "Delay"), width="small"),
             },
         )
     else:
-        st.info("Keine Ankünfte gefunden.")
+        st.info(tr("Keine Ankünfte gefunden.", "No arrivals found."))
 
 # --- Umwelt tab ---
 with tab_umwelt:
-    st.caption(f"Messstation: {STATION_NAME} (DEBE010) · Quelle: Umweltbundesamt")
+    st.caption(tr("Messstation", "Monitoring station") + f": {STATION_NAME} (DEBE010) · "
+               + tr("Quelle: Umweltbundesamt", "Source: German Environment Agency (UBA)"))
 
-    with st.spinner("Lade Luftqualitätsdaten..."):
+    with st.spinner(tr("Lade Luftqualitätsdaten...", "Loading air quality data…")):
         try:
             aq_current = get_airquality_current()
             aq_history = get_airquality_history()
         except Exception as e:
-            st.error(f"Luftqualitätsdaten konnten nicht geladen werden: {e}")
+            st.error(tr("Luftqualitätsdaten konnten nicht geladen werden", "Could not load air quality data") + f": {e}")
             aq_current = {}
             aq_history = pd.DataFrame()
 
     if aq_current:
-        st.subheader("Aktuelle Luftqualität")
+        st.subheader(tr("Aktuelle Luftqualität", "Current air quality"))
         if _is_mobile:
             _aq_items = []
             for label, data in aq_current.items():
                 idx = data["index"]
                 idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
+                idx_label = trl(idx_label)
                 limit = LIMITS.get(label)
-                delta = (f"{data['value'] - limit:+.0f}".replace(".", ",") + " µg/m³ ggü. Grenzwert") if limit else None
+                delta = (f"{data['value'] - limit:+.0f} µg/m³ " + tr("ggü. Grenzwert", "vs. limit")) if limit else None
                 _delta_colour = "#ff4b4b" if (limit and data["value"] > limit) else "#21c354"
                 _aq_items.append({
-                    "label": label + " (" + data["unit"] + ")",
+                    "label": trl(label) + " (" + data["unit"] + ")",
                     "value": data["value"],
                     "delta": delta,
                     "delta_colour": _delta_colour if delta else None,
@@ -1186,11 +1357,12 @@ with tab_umwelt:
             for col, (label, data) in zip(cols, aq_current.items()):
                 idx = data["index"]
                 idx_label, idx_colour = INDEX_LABELS.get(idx, ("–", "#9E9E9E"))
+                idx_label = trl(idx_label)
                 limit = LIMITS.get(label)
-                delta = (f"{data['value'] - limit:+.0f}".replace(".", ",") + " µg/m³ ggü. Grenzwert") if limit else None
+                delta = (f"{data['value'] - limit:+.0f} µg/m³ " + tr("ggü. Grenzwert", "vs. limit")) if limit else None
                 delta_colour = "inverse" if (limit and data["value"] > limit) else "normal"
                 col.metric(
-                    label=f"{label} ({data['unit']})",
+                    label=f"{trl(label)} ({data['unit']})",
                     value=data["value"],
                     delta=delta,
                     delta_color=delta_colour,
@@ -1202,7 +1374,7 @@ with tab_umwelt:
 
     if not aq_history.empty:
         st.divider()
-        st.subheader("Luftqualität im Jahresverlauf (Tagesmittelwerte)")
+        st.subheader(tr("Luftqualität im Jahresverlauf (Tagesmittelwerte)", "Air quality over the year (daily means)"))
         fig_aq = go.Figure()
         colour_map = COMPONENT_COLOURS
         for col in sorted(c for c in aq_history.columns if c != "date"):
@@ -1210,7 +1382,7 @@ with tab_umwelt:
                 x=aq_history["date"],
                 y=aq_history[col],
                 mode="lines",
-                name=col,
+                name=trl(col),
                 line=dict(color=colour_map.get(col, "#888"), width=1.5),
             ))
         # Add EU limit reference lines
@@ -1221,7 +1393,7 @@ with tab_umwelt:
                     line_dash="dot",
                     line_color=colour_map[label],
                     opacity=0.4,
-                    annotation_text=f"{label} Grenzwert",
+                    annotation_text=f"{trl(label)} " + tr("Grenzwert", "limit"),
                     annotation_position="right",
                     annotation_font_size=10,
                 )
@@ -1229,34 +1401,42 @@ with tab_umwelt:
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="µg/m³"),
-            xaxis_title="Datum",
+            xaxis_title=tr("Datum", "Date"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
             margin=dict(t=40, b=20),
             height=420,
         )
-        st.plotly_chart(fig_aq, use_container_width=True, config=_plot_config)
-        st.caption(
+        st.plotly_chart(fig_aq, width="stretch", config=_plot_config)
+        st.caption(tr(
             "Gestrichelte Linien zeigen EU-Grenzwerte: NO₂ 40 µg/m³ (Jahresmittel), "
             "PM₁₀ 50 µg/m³ (Tagesmittel), PM₂,₅ 25 µg/m³ (Jahresmittel), O₃ 120 µg/m³ (8-Stunden-Maximum). "
-            "O₃ steigt im Sommer — die 8-Stunden-Maxima liegen über den Tagesmitteln. Hinweis: Für den gesamten Dezember 2025 liegt nur ein Datenpunkt vor (am 31. Dezember) – die Messstation war mit ziemlicher Sicherheit aufgrund von Wartungs- oder Reparaturarbeiten außer Betrieb."
-        )
+            "O₃ steigt im Sommer — die 8-Stunden-Maxima liegen über den Tagesmitteln. Hinweis: Für den gesamten Dezember 2025 liegt nur ein Datenpunkt vor (am 31. Dezember) – die Messstation war mit ziemlicher Sicherheit aufgrund von Wartungs- oder Reparaturarbeiten außer Betrieb.",
+            "Dashed lines show EU limit values: NO₂ 40 µg/m³ (annual mean), "
+            "PM₁₀ 50 µg/m³ (daily mean), PM₂.₅ 25 µg/m³ (annual mean), O₃ 120 µg/m³ (8-hour maximum). "
+            "O₃ rises in summer, and its 8-hour maxima sit above the daily means. Note: there is only one data point for the whole of December 2025 (on 31 December); the monitoring station was almost certainly out of service for maintenance or repair.",
+        ))
 
     # --- Noise section ---
     st.divider()
-    st.subheader("Umgebungslärm (Strategische Lärmkarten 2022)")
-    st.caption(
+    st.subheader(tr("Umgebungslärm (Strategische Lärmkarten 2022)", "Environmental noise (strategic noise maps 2022)"))
+    st.caption(tr(
         "Berechnete Pegel an allen Gebäudefassaden in Moabit (alle Quellen). "
         "LDEN = gewichteter 24-Stunden-Mittelwert, LN = Nacht (22–6 Uhr). "
         "Schwellen nach Lärmaktionsplan Berlin 2024–2029: Auslösewerte 65 / 55 dB(A), "
         "Gesundheitsgefährdung ab 70 / 60 dB(A). "
-        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Umweltatlas."
-    )
+        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Umweltatlas.",
+        "Calculated levels at every building façade in Moabit (all sources). "
+        "LDEN = weighted 24-hour average, LN = night (10 pm–6 am). "
+        "Thresholds from the Berlin Noise Action Plan 2024–2029: trigger values 65 / 55 dB(A), "
+        "health risk from 70 / 60 dB(A). "
+        "Source: Senate Department for Mobility, Transport, Climate Protection and the Environment, Environmental Atlas.",
+    ))
 
-    with st.spinner("Lade Lärmdaten..."):
+    with st.spinner(tr("Lade Lärmdaten...", "Loading noise data…")):
         try:
             noise = get_noise_data()
         except Exception as e:
-            st.error(f"Lärmdaten konnten nicht geladen werden: {e}")
+            st.error(tr("Lärmdaten konnten nicht geladen werden", "Could not load noise data") + f": {e}")
             noise = None
 
     if noise:
@@ -1265,7 +1445,7 @@ with tab_umwelt:
 
         # Headline metrics
         _noise_items = [
-            ("Fassadenpunkte", _fmt_int(m_data["n_points"])),
+            (tr("Fassadenpunkte", "Façade points"), _fmt_int(m_data["n_points"])),
             ("Median LDEN",    f"{_fmt_float(m_data['median_den'])} dB(A)"),
             ("Median LN",      f"{_fmt_float(m_data['median_n'])} dB(A)"),
             (f"LDEN ≥ {_t['den']} dB(A)", _fmt_pct(m_data["trigger_den_pct"])),
@@ -1276,12 +1456,17 @@ with tab_umwelt:
             for col, (label, value) in zip(st.columns(4), _noise_items):
                 col.metric(label, value)
 
-        st.markdown(
-            f"**{_fmt_pct(m_data['trigger_den_pct'])}** der Fassaden liegen über dem Auslösewert "
-            f"(LDEN ≥ {_t['den']} dB(A)), **{_fmt_pct(m_data['trigger_n_pct'])}** nachts "
+        _p = {k: _fmt_pct(m_data[k]) for k in ("trigger_den_pct", "trigger_n_pct", "health_den_pct", "health_n_pct")}
+        st.markdown(tr(
+            f"**{_p['trigger_den_pct']}** der Fassaden liegen über dem Auslösewert "
+            f"(LDEN ≥ {_t['den']} dB(A)), **{_p['trigger_n_pct']}** nachts "
             f"(LN ≥ {_t['n']} dB(A)). Im gesundheitsgefährdenden Bereich: "
-            f"**{_fmt_pct(m_data['health_den_pct'])}** ganztags, **{_fmt_pct(m_data['health_n_pct'])}** nachts."
-        )
+            f"**{_p['health_den_pct']}** ganztags, **{_p['health_n_pct']}** nachts.",
+            f"**{_p['trigger_den_pct']}** of façades are above the trigger value "
+            f"(LDEN ≥ {_t['den']} dB(A)), **{_p['trigger_n_pct']}** at night "
+            f"(LN ≥ {_t['n']} dB(A)). In the health-risk range: "
+            f"**{_p['health_den_pct']}** over 24 hours, **{_p['health_n_pct']}** at night.",
+        ))
 
         st.divider()
         if _is_mobile:
@@ -1291,9 +1476,9 @@ with tab_umwelt:
 
         # Distribution chart
         with col_dist:
-            st.subheader("Pegelverteilung: 24 h vs. Nacht")
+            st.subheader(tr("Pegelverteilung: 24 h vs. Nacht", "Level distribution: 24 h vs. night"))
             fig_dist = go.Figure()
-            for key, label, colour in [("n", "Nacht (LN)", "#1E88E5"), ("den", "24 h (LDEN)", "#C0504D")]:
+            for key, label, colour in [("n", tr("Nacht (LN)", "Night (LN)"), "#1E88E5"), ("den", "24 h (LDEN)", "#C0504D")]:
                 fig_dist.add_trace(go.Bar(
                     name=label,
                     x=DB_BANDS,
@@ -1304,17 +1489,17 @@ with tab_umwelt:
                 barmode="group",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Anzahl Fassadenpunkte"),
-                xaxis_title="Pegelklasse (dB(A))",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=tr("Anzahl Fassadenpunkte", "Number of façade points")),
+                xaxis_title=tr("Pegelklasse (dB(A))", "Level band (dB(A))"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=380,
             )
-            st.plotly_chart(fig_dist, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_dist, width="stretch", config=_plot_config)
 
         # Top streets chart
         with col_top:
-            st.subheader("Lauteste Straßen (Straßenlärm, LDEN)")
+            st.subheader(tr("Lauteste Straßen (Straßenlärm, LDEN)", "Loudest streets (road noise, LDEN)"))
             top = sorted(noise["top"], key=lambda r: r["den"])
             fig_top = go.Figure(go.Bar(
                 x=[r["den"] for r in top],
@@ -1329,7 +1514,7 @@ with tab_umwelt:
             ))
             fig_top.add_vline(
                 x=_t["den"], line_dash="dot", line_color="white", opacity=0.4,
-                annotation_text=f"Auslösewert ({_t['den']} dB(A))",
+                annotation_text=tr("Auslösewert", "Trigger value") + f" ({_t['den']} dB(A))",
                 annotation_font_size=10, annotation_position="bottom right",
             )
             fig_top.update_layout(
@@ -1340,30 +1525,34 @@ with tab_umwelt:
                 margin=dict(t=40, b=20, r=60),
                 height=380,
             )
-            st.plotly_chart(fig_top, use_container_width=True, config=_plot_config)
-            st.caption(
+            st.plotly_chart(fig_top, width="stretch", config=_plot_config)
+            st.caption(tr(
                 "Median des Straßenlärms an straßenseitigen Fassaden (≤ 20 m von der Straße, "
                 "mind. 50 Fassadenpunkte; Anzahl in Klammern). Rot: über der Gesundheitsschwelle, "
-                "orange: über dem Auslösewert."
-            )
+                "orange: über dem Auslösewert.",
+                "Median road noise at street-facing façades (≤ 20 m from the street, "
+                "at least 50 façade points; count in brackets). Red: above the health-risk threshold, "
+                "orange: above the trigger value.",
+            ))
 
         # --- Noise at sensitive buildings ---
         _fac = noise.get("facilities") or []
         if _fac:
-            st.subheader("Lärm an Kitas, Schulen und Krankenhäusern")
+            st.subheader(tr("Lärm an Kitas, Schulen und Krankenhäusern", "Noise at kitas, schools and hospitals"))
             _fac_series = [
                 ("trigger_den_pct", f"24 h: LDEN ≥ {_t['den']} dB(A)", "#C0504D"),
-                ("trigger_n_pct",   f"Nacht: LN ≥ {_t['n']} dB(A)",    "#1E88E5"),
+                ("trigger_n_pct",   tr("Nacht", "Night") + f": LN ≥ {_t['n']} dB(A)", "#1E88E5"),
             ]
             fig_fac = go.Figure()
             for key, label, colour in _fac_series:
                 fig_fac.add_trace(go.Bar(
                     name=label,
-                    x=[f["label"] for f in _fac],
+                    x=[trl(f["label"]) for f in _fac],
                     y=[f[key] for f in _fac],
                     marker_color=colour,
                     text=[
-                        f"{_fmt_pct(f[key])}<br>({round(f[key] / 100 * f['buildings'])} von {f['buildings']})"
+                        f"{_fmt_pct(f[key])}<br>({round(f[key] / 100 * f['buildings'])} "
+                        + tr("von", "of") + f" {f['buildings']})"
                         for f in _fac
                     ],
                     textposition="outside",
@@ -1373,50 +1562,57 @@ with tab_umwelt:
                 barmode="group",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", ticksuffix=" %",
-                           range=[0, _fac_max * 1.35], title="Anteil der Gebäude"),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", ticksuffix=tr(" %", "%"),
+                           range=[0, _fac_max * 1.35], title=tr("Anteil der Gebäude", "Share of buildings")),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=400,
             )
-            st.plotly_chart(fig_fac, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_fac, width="stretch", config=_plot_config)
             _fac_health = "; ".join(
-                f"{f['label']} {_fmt_pct(f['health_den_pct'])} / {_fmt_pct(f['health_n_pct'])}" for f in _fac
+                f"{trl(f['label'])} {_fmt_pct(f['health_den_pct'])} / {_fmt_pct(f['health_n_pct'])}" for f in _fac
             )
-            st.caption(
+            st.caption(tr(
                 "Anteil der Gebäude, deren am stärksten belastete Fassade über dem Auslösewert des "
                 "Lärmaktionsplans liegt (alle Lärmquellen). Im gesundheitsgefährdenden Bereich "
                 f"(≥ {_h['den']} / {_h['n']} dB(A), 24 h / Nacht): {_fac_health}. "
-                "Gebäude laut Lärmkartierung 2022, ohne Namen; ein Standort kann mehrere Gebäude umfassen."
-            )
+                "Gebäude laut Lärmkartierung 2022, ohne Namen; ein Standort kann mehrere Gebäude umfassen.",
+                "Share of buildings whose most exposed façade is above the noise action plan's "
+                "trigger value (all noise sources). In the health-risk range "
+                f"(≥ {_h['den']} / {_h['n']} dB(A), 24 h / night): {_fac_health}. "
+                "Buildings as mapped for the 2022 noise maps, without names; one site can comprise several buildings.",
+            ))
 
     # --- Trees section ---
     st.divider()
-    st.subheader("Stadtbäume (Baumbestand Berlin)")
-    st.caption(
+    st.subheader(tr("Stadtbäume (Baumbestand Berlin)", "Street and park trees (Berlin tree register)"))
+    st.caption(tr(
         "Straßen- und Anlagenbäume in Moabit laut Baumkataster des Grünflächeninformationssystems (GRIS). "
         "Anlagenbäume sind nur teilweise erfasst. "
-        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Baumbestand Berlin."
-    )
+        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Baumbestand Berlin.",
+        "Street and park trees in Moabit from the tree register of Berlin's green-space information system (GRIS). "
+        "Park trees are only partly recorded. "
+        "Source: Senate Department for Mobility, Transport, Climate Protection and the Environment, Baumbestand Berlin.",
+    ))
     try:
         _tdf = pd.DataFrame(get_trees(), columns=TREE_FIELDS)
     except Exception as e:
-        st.error(f"Baumdaten konnten nicht geladen werden: {e}")
+        st.error(tr("Baumdaten konnten nicht geladen werden", "Could not load tree data") + f": {e}")
         _tdf = pd.DataFrame()
 
     if not _tdf.empty:
         _tdf["year"] = pd.to_numeric(_tdf["year"], errors="coerce")
         _tdf["age"] = date.today().year - _tdf["year"]
-        _tlabels = {k: v["label"] for k, v in TREE_TYPES.items()}
+        _tlabels = {k: trl(v["label"]) for k, v in TREE_TYPES.items()}
         _tcolours = {k: v["colour"] for k, v in TREE_TYPES.items()}
         _n_street = int((_tdf["type"] == "strasse").sum())
         _n_park = int((_tdf["type"] == "anlage").sum())
 
         _tree_items = [
-            ("Bäume gesamt",    _fmt_int(len(_tdf))),
-            ("Straßenbäume",    _fmt_int(_n_street)),
-            ("Anlagenbäume",    _fmt_int(_n_park)),
-            ("Medianes Alter",  f"{_fmt_int(_tdf['age'].median())} Jahre"),
+            (tr("Bäume gesamt", "Trees in total"), _fmt_int(len(_tdf))),
+            (tr("Straßenbäume", "Street trees"),    _fmt_int(_n_street)),
+            (tr("Anlagenbäume", "Park trees"),      _fmt_int(_n_park)),
+            (tr("Medianes Alter", "Median age"),    f"{_fmt_int(_tdf['age'].median())} " + tr("Jahre", "years")),
         ]
         if _is_mobile:
             _metrics_2col([{"label": l, "value": v} for l, v in _tree_items])
@@ -1431,20 +1627,21 @@ with tab_umwelt:
 
         # Most common species, stacked by street/park
         with col_species:
-            st.subheader("Häufigste Baumarten")
+            st.subheader(tr("Häufigste Baumarten", "Most common species"))
             _top_species = _tdf["species"].value_counts().head(10).index.tolist()
             _sp = (_tdf[_tdf["species"].isin(_top_species)]
                    .groupby(["species", "type"]).size().unstack(fill_value=0))
             # Desktop: horizontal bars, largest at the top. Mobile: vertical bars
             # (portrait), largest first, per the dashboard's mobile chart rule.
             _order = _sp.sum(axis=1).sort_values(ascending=not _is_mobile).index.tolist()
+            _order_shown = [tr_species(sp) for sp in _order]
             fig_sp = go.Figure()
             for t in TREE_TYPES:
                 vals = [int(_sp.loc[sp, t]) if t in _sp.columns else 0 for sp in _order]
                 if _is_mobile:
-                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=_order, y=vals, marker_color=_tcolours[t]))
+                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=_order_shown, y=vals, marker_color=_tcolours[t]))
                 else:
-                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=vals, y=_order, orientation="h",
+                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=vals, y=_order_shown, orientation="h",
                                             marker_color=_tcolours[t]))
             fig_sp.update_layout(
                 barmode="stack",
@@ -1456,19 +1653,20 @@ with tab_umwelt:
             )
             if _is_mobile:
                 fig_sp.update_layout(xaxis=dict(tickangle=-40),
-                                     yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"))
+                                     yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=tr("Bäume", "Trees")))
             else:
-                fig_sp.update_layout(xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"))
-            st.plotly_chart(fig_sp, use_container_width=True, config=_plot_config)
+                fig_sp.update_layout(xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=tr("Bäume", "Trees")))
+            st.plotly_chart(fig_sp, width="stretch", config=_plot_config)
 
         # Planting by decade, stacked by street/park
         with col_decade:
-            st.subheader("Pflanzjahre nach Jahrzehnt")
+            st.subheader(tr("Pflanzjahre nach Jahrzehnt", "Planting years by decade"))
             _dated = _tdf.dropna(subset=["year"]).copy()
             _dated["decade"] = (_dated["year"] // 10 * 10).astype(int)
-            _dated["decade_label"] = _dated["decade"].map(lambda d: "vor 1900" if d < 1900 else f"{d}er")
+            _dated["decade_label"] = _dated["decade"].map(
+                lambda d: tr("vor 1900", "before 1900") if d < 1900 else f"{d}" + tr("er", "s"))
             _dec = _dated.groupby(["decade_label", "type"]).size().unstack(fill_value=0)
-            _dec_order = sorted(_dec.index, key=lambda lbl: 0 if lbl == "vor 1900" else int(lbl[:4]))
+            _dec_order = sorted(_dec.index, key=lambda lbl: int(lbl[:4]) if lbl[:4].isdigit() else 0)
             fig_dec = go.Figure()
             for t in TREE_TYPES:
                 fig_dec.add_trace(go.Bar(
@@ -1480,35 +1678,41 @@ with tab_umwelt:
                 barmode="stack",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=tr("Bäume", "Trees")),
                 xaxis=dict(tickangle=-40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=460 if _is_mobile else 420,
             )
-            st.plotly_chart(fig_dec, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_dec, width="stretch", config=_plot_config)
             _undated = len(_tdf) - len(_dated)
-            st.caption(f"Ohne Pflanzjahr: {_fmt_int(_undated)} Bäume (überwiegend Anlagenbäume). "
-                       "Viele Pflanzjahre sind geschätzt – sie häufen sich auf runden Jahren wie 1950 oder 1975.")
+            st.caption(tr(
+                f"Ohne Pflanzjahr: {_fmt_int(_undated)} Bäume (überwiegend Anlagenbäume). "
+                "Viele Pflanzjahre sind geschätzt – sie häufen sich auf runden Jahren wie 1950 oder 1975.",
+                f"No planting year: {_fmt_int(_undated)} trees (mostly park trees). "
+                "Many planting years are estimates; they cluster on round years such as 1950 or 1975.",
+            ))
 
         # Oldest recorded trees
-        st.markdown("**Älteste erfasste Bäume**")
+        st.markdown("**" + tr("Älteste erfasste Bäume", "Oldest recorded trees") + "**")
         _oldest = _tdf.dropna(subset=["year"]).sort_values(["year", "height"], ascending=[True, False]).head(5)
         _oldest_rows = [
             {
-                "Baumart":   r.species,
-                "Gepflanzt": str(int(r.year)),
-                "Alter":     f"{int(r.age)} Jahre",
-                "Höhe":      f"{int(r.height)} m" if pd.notna(r.height) else "–",
-                "Standort":  (f"{r.street} {r.number}".strip() if r.street else "Grünanlage"),
+                tr("Baumart", "Species"):   tr_species(r.species),
+                tr("Gepflanzt", "Planted"): str(int(r.year)),
+                tr("Alter", "Age"):         f"{int(r.age)} " + tr("Jahre", "years"),
+                tr("Höhe", "Height"):       f"{int(r.height)} m" if pd.notna(r.height) else "–",
+                tr("Standort", "Location"): (f"{r.street} {r.number}".strip() if r.street
+                                             else tr("Grünanlage", "Green space")),
             }
             for r in _oldest.itertuples()
         ]
         if _is_mobile:
             st.table(pd.DataFrame(_oldest_rows))
         else:
-            st.dataframe(pd.DataFrame(_oldest_rows), use_container_width=True, hide_index=True, height="content")
-        st.caption("Pflanzjahre laut Baumkataster, teils geschätzt.")
+            st.dataframe(pd.DataFrame(_oldest_rows), width="stretch", hide_index=True, height="content")
+        st.caption(tr("Pflanzjahre laut Baumkataster, teils geschätzt.",
+                      "Planting years from the tree register, some estimated."))
 
 # --- Kriminalität tab ---
 with tab_crime:
@@ -1533,13 +1737,14 @@ with tab_crime:
              "#FF6692","#B6E880","#FECB52","#19D3F3","#636EFA"]
         )
     }
-    st.caption("Quelle: Polizei Berlin, Kriminalitätsatlas (PKS) · Moabit West + Ost kombiniert")
+    st.caption(tr("Quelle: Polizei Berlin, Kriminalitätsatlas (PKS) · Moabit West + Ost kombiniert",
+                  "Source: Berlin Police, Crime Atlas (PKS) · Moabit West and Ost combined"))
 
-    with st.spinner("Lade Kriminalitätsdaten..."):
+    with st.spinner(tr("Lade Kriminalitätsdaten...", "Loading crime data…")):
         try:
             crime_df = get_crime_data()
         except Exception as e:
-            st.error(f"Kriminalitätsdaten konnten nicht geladen werden: {e}")
+            st.error(tr("Kriminalitätsdaten konnten nicht geladen werden", "Could not load crime data") + f": {e}")
             crime_df = None
 
     if crime_df is not None:
@@ -1565,72 +1770,73 @@ with tab_crime:
 
         def _crime_delta(d):
             sign = "+" if d >= 0 else ""
-            return f"{sign}{_fmt_int(d)} ggü. {prev_year}"
+            return f"{sign}{_fmt_int(d)} " + tr("ggü.", "vs.") + f" {prev_year}"
 
         if _is_mobile:
             _metrics_2col([
-                {"label": f"Straftaten insgesamt ({latest_year})", "value": _fmt_int(total_latest),
+                {"label": f"{trl('Straftaten insgesamt')} ({latest_year})", "value": _fmt_int(total_latest),
                  "delta": _crime_delta(delta_total),
                  "delta_colour": "#ff4b4b" if delta_total > 0 else "#21c354"},
-                {"label": f"Kieztaten ({latest_year})", "value": _fmt_int(kieztaten_latest),
+                {"label": f"{trl('Kieztaten')} ({latest_year})", "value": _fmt_int(kieztaten_latest),
                  "delta": _crime_delta(delta_kiez),
                  "delta_colour": "#ff4b4b" if delta_kiez > 0 else "#21c354"},
-                {"label": f"Fahrraddiebstahl ({latest_year})", "value": _fmt_int(fahrrad_latest),
+                {"label": f"{trl('Fahrraddiebstahl')} ({latest_year})", "value": _fmt_int(fahrrad_latest),
                  "delta": _crime_delta(delta_fahrrad),
                  "delta_colour": "#ff4b4b" if delta_fahrrad > 0 else "#21c354"},
-                {"label": f"Wohnraumeinbruch ({latest_year})", "value": _fmt_int(einbruch_latest),
+                {"label": f"{trl('Wohnraumeinbruch')} ({latest_year})", "value": _fmt_int(einbruch_latest),
                  "delta": _crime_delta(delta_einbruch),
                  "delta_colour": "#ff4b4b" if delta_einbruch > 0 else "#21c354"},
             ])
         else:
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric(f"Straftaten insgesamt ({latest_year})", _fmt_int(total_latest),
+            col1.metric(f"{trl('Straftaten insgesamt')} ({latest_year})", _fmt_int(total_latest),
                         delta=_crime_delta(delta_total),
                         delta_color="inverse" if delta_total > 0 else "normal")
-            col2.metric(f"Kieztaten ({latest_year})", _fmt_int(kieztaten_latest),
+            col2.metric(f"{trl('Kieztaten')} ({latest_year})", _fmt_int(kieztaten_latest),
                         delta=_crime_delta(delta_kiez),
                         delta_color="inverse" if delta_kiez > 0 else "normal")
-            col3.metric(f"Fahrraddiebstahl ({latest_year})", _fmt_int(fahrrad_latest),
+            col3.metric(f"{trl('Fahrraddiebstahl')} ({latest_year})", _fmt_int(fahrrad_latest),
                         delta=_crime_delta(delta_fahrrad),
                         delta_color="inverse" if delta_fahrrad > 0 else "normal")
-            col4.metric(f"Wohnraumeinbruch ({latest_year})", _fmt_int(einbruch_latest),
+            col4.metric(f"{trl('Wohnraumeinbruch')} ({latest_year})", _fmt_int(einbruch_latest),
                         delta=_crime_delta(delta_einbruch),
                         delta_color="inverse" if delta_einbruch > 0 else "normal")
 
         st.divider()
 
         # --- Bezirk comparison ---
-        st.subheader("Straftaten insgesamt im Berliner Vergleich")
-        st.caption("Moabit ist ein Ortsteil von Mitte — die Balken zeigen Bezirkswerte, nicht Moabit direkt.")
-        with st.spinner("Lade Bezirksdaten..."):
+        st.subheader(tr("Straftaten insgesamt im Berliner Vergleich", "All offences: Berlin comparison"))
+        st.caption(tr("Moabit ist ein Ortsteil von Mitte — die Balken zeigen Bezirkswerte, nicht Moabit direkt.",
+                      "Moabit is part of the Mitte district; the bars show district figures, not Moabit itself."))
+        with st.spinner(tr("Lade Bezirksdaten...", "Loading district data…")):
             try:
                 bz_fall, bz_hz = get_bezirk_comparison()
             except Exception as e:
-                st.error(f"Bezirksdaten konnten nicht geladen werden: {e}")
+                st.error(tr("Bezirksdaten konnten nicht geladen werden", "Could not load district data") + f": {e}")
                 bz_fall, bz_hz = None, None
 
         if bz_fall is not None:
             _bz_sel_col, _bz_year_col, _ = st.columns([2, 1, 2])
             with _bz_sel_col:
                 _bz_metric = st.radio(
-                    "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+                    tr("Kennzahl", "Measure"), ["Fallzahlen", "HZ (pro 100 000 Einwohner)"], format_func=trl,
                     horizontal=True, key="bz_metric"
                 )
             with _bz_year_col:
                 _bz_years = sorted(bz_fall["year"].unique(), reverse=True)
-                _bz_year = st.selectbox("Jahr", options=_bz_years, index=0, key="bz_year")
+                _bz_year = st.selectbox(tr("Jahr", "Year"), options=_bz_years, index=0, key="bz_year")
 
             _bz_use_hz = _bz_metric.startswith("HZ")
             if _bz_use_hz:
                 _bz_data = bz_hz[bz_hz["year"] == _bz_year].sort_values("Bezirk", ascending=False)
                 _bz_x = _bz_data["HZ"].round(0).astype(int)
                 _bz_text = _bz_data["HZ"].apply(lambda v: _fmt_int(round(v)))
-                _bz_title = "HZ (pro 100 000 Einwohner)"
+                _bz_title = trl("HZ (pro 100 000 Einwohner)")
             else:
                 _bz_data = bz_fall[bz_fall["year"] == _bz_year].sort_values("Bezirk", ascending=False)
                 _bz_x = _bz_data["Fallzahlen"]
                 _bz_text = _bz_data["Fallzahlen"].apply(_fmt_int)
-                _bz_title = "Fallzahlen"
+                _bz_title = trl("Fallzahlen")
             _bz_colours = [BEZIRK_COLOURS.get(b, "#888") for b in _bz_data["Bezirk"]]
             if _is_mobile:
                 fig_bz = go.Figure(go.Bar(
@@ -1664,14 +1870,14 @@ with tab_crime:
                     margin=dict(t=10, b=20, r=80),
                     height=400,
                 )
-            st.plotly_chart(fig_bz, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_bz, width="stretch", config=_plot_config)
 
         st.divider()
 
         # --- All-Bezirke trend ---
-        st.subheader("Alle Bezirke im Vergleich")
+        st.subheader(tr("Alle Bezirke im Vergleich", "All districts compared"))
         _bez_metric = st.radio(
-            "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+            tr("Kennzahl", "Measure"), ["Fallzahlen", "HZ (pro 100 000 Einwohner)"], format_func=trl,
             horizontal=True, key="bez_trend_metric"
         )
         _use_hz = _bez_metric.startswith("HZ")
@@ -1693,17 +1899,18 @@ with tab_crime:
         _fig_btr.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_btr_val),
-            xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=trl(_btr_val)),
+            xaxis=dict(tickmode="linear", dtick=1, title=tr("Jahr", "Year")),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
             margin=dict(t=60, b=20),
             height=460,
         )
-        st.plotly_chart(_fig_btr, use_container_width=True, config=_plot_config)
-        st.caption("Mitte (rot) enthält Moabit. HZ = Häufigkeitszahl (Straftaten pro 100 000 Einwohner).")
+        st.plotly_chart(_fig_btr, width="stretch", config=_plot_config)
+        st.caption(tr("Mitte (rot) enthält Moabit. HZ = Häufigkeitszahl (Straftaten pro 100 000 Einwohner).",
+                      "Mitte (red) contains Moabit. HZ = crime rate (offences per 100,000 residents)."))
 
-        st.subheader("Warum ist die Kriminalitätsrate in Moabit so hoch?")
-        st.markdown("""
+        st.subheader(tr("Warum ist die Kriminalitätsrate in Moabit so hoch?", "Why is Moabit's crime rate so high?"))
+        st.markdown(tr("""
 Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein genauerer Blick relativiert das Bild erheblich.
 
 **Mitte als touristisches Zentrum.** Moabit ist ein Ortsteil von Mitte — dem historischen Herz Berlins mit Alexanderplatz, Museumsinsel, Brandenburger Tor und Hackeschem Markt. Enormes Besucheraufkommen trifft hier auf eine vergleichsweise kleine gemeldete Wohnbevölkerung, was die HZ des gesamten Bezirks strukturell in die Höhe treibt — und Moabit als Ortsteil davon mit betrifft.
@@ -1715,14 +1922,26 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
 **Sozialer Brennpunkt Kleiner Tiergarten.** Die offene Drogenszene rund um den Kleinen Tiergarten erzeugt Drogen- und Beschaffungskriminalität, die in den Statistiken sichtbar ist.
 
 **Polizeipräsenz erhöht Erfassungsquote.** Gebiete mit starker Polizeipräsenz — etwa rund um Hbf und Kriminalgericht — weisen schlicht mehr *erfasste* Straftaten auf, nicht unbedingt mehr tatsächliche.
-""")
+""", """
+Moabit's crime rate is higher than the Berlin average, but a closer look puts that figure into perspective.
+
+**Mitte as a tourist centre.** Moabit is part of the Mitte district, Berlin's historic heart, with Alexanderplatz, Museum Island, the Brandenburg Gate and Hackescher Markt. Huge numbers of visitors meet a comparatively small registered population, which structurally pushes up the crime rate (HZ) of the whole district, and of Moabit as part of it.
+
+**The Hauptbahnhof effect.** Germany's busiest railway station sits on Moabit's eastern edge and draws hundreds of thousands of travellers every day. Opportunistic offences such as pickpocketing cluster around transport hubs and structurally raise the number of recorded cases.
+
+**The crime rate and its population base.** The HZ is calculated against the *registered* resident population, not the number of people actually present in the neighbourhood. In areas with many daytime visitors, such as Moabit Ost, the HZ is therefore systematically inflated.
+
+**Kleiner Tiergarten as a social hotspot.** The open drug scene around the Kleiner Tiergarten generates drug-related and acquisitive crime, which shows up in the statistics.
+
+**Police presence raises the recording rate.** Areas with a strong police presence, such as around the Hauptbahnhof and the criminal court, simply have more *recorded* offences, not necessarily more actual ones.
+"""))
 
         st.divider()
 
         # --- Mitte LOR chart ---
-        st.subheader("Bezirk Mitte: Stadtteile im Vergleich")
+        st.subheader(tr("Bezirk Mitte: Stadtteile im Vergleich", "Mitte district: areas compared"))
         _lor_metric = st.radio(
-            "Kennzahl", ["Fallzahlen", "HZ (pro 100 000 Einwohner)"],
+            tr("Kennzahl", "Measure"), ["Fallzahlen", "HZ (pro 100 000 Einwohner)"], format_func=trl,
             horizontal=True, key="lor_metric"
         )
         _lor_fz_df, _lor_hz_df = get_mitte_lor_data()
@@ -1738,7 +1957,7 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
             _fig_lor.add_trace(go.Scatter(
                 x=_lor_pivot.index.tolist(),
                 y=_lor_pivot[_geb].tolist(),
-                name=_geb,
+                name=trl(_geb),
                 mode="lines+markers",
                 line=dict(width=2.5 if _is_moabit else 1.5, color=_LOR_COLOURS.get(_geb, "#888")),
                 marker=dict(size=5 if _is_moabit else 4),
@@ -1746,23 +1965,25 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
         _fig_lor.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=_lor_val),
-            xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=trl(_lor_val)),
+            xaxis=dict(tickmode="linear", dtick=1, title=tr("Jahr", "Year")),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
             margin=dict(t=60, b=20),
             height=460,
         )
-        st.plotly_chart(_fig_lor, use_container_width=True, config=_plot_config)
-        _lor_caption = "Moabit West (blau), Moabit Ost (rot), Moabit gesamt (orange). Alphabetische Reihenfolge."
+        st.plotly_chart(_fig_lor, width="stretch", config=_plot_config)
+        _lor_caption = tr("Moabit West (blau), Moabit Ost (rot), Moabit gesamt (orange). Alphabetische Reihenfolge.",
+                          "Moabit West (blue), Moabit Ost (red), Moabit total (orange). Alphabetical order.")
         if _lor_use_hz:
-            _lor_caption += " Kombinierte HZ für Moabit gesamt nicht verfügbar (bevölkerungsgewichtet)."
+            _lor_caption += tr(" Kombinierte HZ für Moabit gesamt nicht verfügbar (bevölkerungsgewichtet).",
+                               " No combined HZ for Moabit as a whole (it would need population weighting).")
         st.caption(_lor_caption)
 
         st.divider()
 
         # --- Trend chart ---
-        st.subheader("Entwicklung 2015–" + str(latest_year) + " (Moabit)")
-        all_cats = sorted(CATEGORIES.keys())
+        st.subheader(tr("Entwicklung", "Trend") + " 2015–" + str(latest_year) + " (Moabit)")
+        all_cats = sorted(CATEGORIES.keys(), key=trl)  # alphabetical by displayed name
         st.markdown(
             """<style>
             div[data-testid="stMultiSelect"] span[data-baseweb="tag"] {
@@ -1771,30 +1992,38 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
             </style>""",
             unsafe_allow_html=True
         )
+        # A keyed multiselect keeps its tag labels when only format_func changes, so
+        # the tags would stay in the old language after a switch. The selection is
+        # kept under a language-neutral name; the widget key is per language and is
+        # seeded from it, so switching rebuilds the widget without losing the choice.
+        if "crime_cats_sel" not in st.session_state:
+            st.session_state.crime_cats_sel = list(DEFAULT_CATEGORIES)
         selected = st.multiselect(
-            "Deliktsbereiche",
+            tr("Deliktsbereiche", "Offence categories"),
             options=all_cats,
-            default=DEFAULT_CATEGORIES,
-            key="crime_cats",
+            format_func=trl,
+            default=st.session_state.crime_cats_sel,
+            key=f"crime_cats_{LANG}",
         )
+        st.session_state.crime_cats_sel = selected
         _swatch_html = '<div style="display:flex;flex-wrap:wrap;row-gap:4px;column-gap:12px;margin-top:4px;">'
         for _c in all_cats:
             _col = _CAT_COLOURS[_c]
             _swatch_html += (
                 f'<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;">'
                 f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
-                f'background:{_col};flex-shrink:0;"></span>{_c}</span>'
+                f'background:{_col};flex-shrink:0;"></span>{trl(_c)}</span>'
             )
         _swatch_html += '</div>'
         st.markdown(_swatch_html, unsafe_allow_html=True)
 
         if selected:
             fig_trend = go.Figure()
-            for cat in sorted(selected):
+            for cat in sorted(selected, key=trl):
                 fig_trend.add_trace(go.Scatter(
                     x=crime_df.index.tolist(),
                     y=crime_df[cat].tolist(),
-                    name=cat,
+                    name=trl(cat),
                     mode="lines+markers",
                     line=dict(color=_CAT_COLOURS.get(cat, "#888"), width=2),
                     marker=dict(size=5),
@@ -1802,45 +2031,49 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
             fig_trend.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Fallzahlen"),
-                xaxis=dict(tickmode="linear", dtick=1, title="Jahr"),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title=trl("Fallzahlen")),
+                xaxis=dict(tickmode="linear", dtick=1, title=tr("Jahr", "Year")),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=60, b=20),
                 height=420,
             )
-            st.plotly_chart(fig_trend, use_container_width=True, config=_plot_config)
+            st.plotly_chart(fig_trend, width="stretch", config=_plot_config)
             st.caption(
-                "⚠️ 2016 zeigt einen auffälligen Ausreißer (+33 % gegenüber 2015), "
-                "der wahrscheinlich auf eine Änderung der Gebietsabgrenzung oder der statistischen "
-                "Erfassungsmethodik zurückzuführen ist. Die Daten für 2015 und 2016 sollten mit "
-                "Vorsicht interpretiert werden."
+                tr("⚠️ 2016 zeigt einen auffälligen Ausreißer (+33 % gegenüber 2015), "
+                   "der wahrscheinlich auf eine Änderung der Gebietsabgrenzung oder der statistischen "
+                   "Erfassungsmethodik zurückzuführen ist. Die Daten für 2015 und 2016 sollten mit "
+                   "Vorsicht interpretiert werden.",
+                   "⚠️ 2016 shows a striking outlier (+33% on 2015), most likely caused by a change "
+                   "in area boundaries or in statistical recording methods. Treat the 2015 and 2016 "
+                   "figures with caution.")
             )
 
         st.divider()
 
         # --- Latest year breakdown ---
-        st.subheader("Alle Deliktsbereiche")
+        st.subheader(tr("Alle Deliktsbereiche", "All offence categories"))
         _crime_years = crime_df.index.tolist()[::-1]
         _col_sel, _ = st.columns([1, 3])
         with _col_sel:
-            _bar_year = st.selectbox("Jahr", options=_crime_years, index=0, key="crime_bar_year")
+            _bar_year = st.selectbox(tr("Jahr", "Year"), options=_crime_years, index=0, key="crime_bar_year")
         _by_area = get_crime_data_by_area()
         _cats_bar = [c for c in CATEGORIES if c != "Straftaten insgesamt"]
         _west = _by_area[_bar_year].get("Moabit West", {})
         _ost  = _by_area[_bar_year].get("Moabit Ost",  {})
-        _sorted_cats = sorted(_cats_bar) if _is_mobile else sorted(_cats_bar, reverse=True)
+        _sorted_cats = sorted(_cats_bar, key=trl) if _is_mobile else sorted(_cats_bar, key=trl, reverse=True)
+        _cats_shown = [trl(c) for c in _sorted_cats]
         _vals_west = [_west.get(c, 0) for c in _sorted_cats]
         _vals_ost  = [_ost.get(c, 0)  for c in _sorted_cats]
         _totals    = [w + o for w, o in zip(_vals_west, _vals_ost)]
         fig_bar = go.Figure()
         if _is_mobile:
             fig_bar.add_trace(go.Bar(
-                x=_sorted_cats, y=_vals_west,
+                x=_cats_shown, y=_vals_west,
                 name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
                 legendrank=2,
             ))
             fig_bar.add_trace(go.Bar(
-                x=_sorted_cats, y=_vals_ost,
+                x=_cats_shown, y=_vals_ost,
                 name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
                 legendrank=1,
                 text=[_fmt_int(t) for t in _totals],
@@ -1858,12 +2091,12 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
             )
         else:
             fig_bar.add_trace(go.Bar(
-                x=_vals_west, y=_sorted_cats, orientation="h",
+                x=_vals_west, y=_cats_shown, orientation="h",
                 name="Moabit West", marker_color="#1E88E5", marker_line_width=0,
                 legendrank=2,
             ))
             fig_bar.add_trace(go.Bar(
-                x=_vals_ost, y=_sorted_cats, orientation="h",
+                x=_vals_ost, y=_cats_shown, orientation="h",
                 name="Moabit Ost", marker_color="#C0504D", marker_line_width=0,
                 legendrank=1,
                 text=[_fmt_int(t) for t in _totals],
@@ -1878,8 +2111,9 @@ Moabits Kriminalitätsrate ist höher als der Berliner Durchschnitt — doch ein
                 margin=dict(t=40, b=20, r=80),
                 height=480,
             )
-        st.plotly_chart(fig_bar, use_container_width=True, config=_plot_config)
-        st.caption("Gestapelte Balken: Moabit West (blau) + Moabit Ost (rot). Beschriftung = Gesamtwert.")
+        st.plotly_chart(fig_bar, width="stretch", config=_plot_config)
+        st.caption(tr("Gestapelte Balken: Moabit West (blau) + Moabit Ost (rot). Beschriftung = Gesamtwert.",
+                      "Stacked bars: Moabit West (blue) + Moabit Ost (red). Labels show the total."))
 
 with tab_about:
     if _is_mobile:
@@ -1887,21 +2121,27 @@ with tab_about:
     else:
         col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Über Moabit")
-        st.markdown("""
+        st.subheader(tr("Über Moabit", "About Moabit"))
+        st.markdown(tr("""
 Moabit ist ein dichtbevölkerter Ortsteil im Bezirk Mitte, unmittelbar nördlich des Tiergartens gelegen. Der Ortsteil wird vollständig von vier Wasserstraßen umschlossen: Spree, Berlin-Spandauer Schifffahrtskanal, Westhafenkanal und Charlottenburger Verbindungskanal. Diese Insellage verleiht Moabit einen unverwechselbaren Charakter, über 26 Straßen-, Bahn- und Fußgängerbrücken mit der übrigen Stadt verbunden.
-""")
+""", """
+Moabit is a densely populated locality in the Mitte district, directly north of the Tiergarten. It is entirely enclosed by four waterways: the Spree, the Berlin-Spandau Ship Canal, the Westhafen Canal and the Charlottenburg Connecting Canal. This island location gives Moabit its distinctive character; more than 26 road, rail and foot bridges link it to the rest of the city.
+"""))
 
-        st.subheader("Bevölkerung & Charakter")
-        st.markdown("""
+        st.subheader(tr("Bevölkerung & Charakter", "Population & character"))
+        st.markdown(tr("""
 Moabit ist eines der am dichtesten besiedelten und multikulturellsten Viertel Berlins. Rund **40 %** der Einwohner haben einen Migrationshintergrund: türkische, arabische und osteuropäische Gemeinschaften sind besonders präsent. Verglichen mit aufgewerteten Nachbarvierteln wie Mitte oder Prenzlauer Berg ist Moabit **authentischer und weniger gentrifiziert**; die Mieten sind bisher verhältnismäßig moderat geblieben, steigen aber.
 
 *Daten zur Bevölkerungsstruktur sind im Tab „Bevölkerung“ zu finden.*
-""")
+""", """
+Moabit is one of Berlin's most densely populated and multicultural neighbourhoods. Around **40%** of residents have a migration background, with Turkish, Arab and Eastern European communities particularly present. Compared with gentrified neighbouring areas such as Mitte or Prenzlauer Berg, Moabit is **more authentic and less gentrified**; rents have so far stayed relatively moderate, but they are rising.
+
+*Population figures are in the ‘Population’ tab.*
+"""))
 
 
-        st.subheader("Lage & Verkehr")
-        st.markdown("""
+        st.subheader(tr("Lage & Verkehr", "Location & transport"))
+        st.markdown(tr("""
 Der **Berlin Hauptbahnhof** (der wichtigste Eisenbahnknotenpunkt Deutschlands) liegt am östlichen Rand Moabits und bietet hervorragende Anbindung an S-Bahn, U-Bahn, Tram und Fernzüge. Das Regierungsviertel grenzt unmittelbar an, ebenso wie Tiergarten und Charlottenburg.
 
 - **U-Bahn:** U9 (Turmstraße, Birkenstraße)
@@ -1910,18 +2150,33 @@ Der **Berlin Hauptbahnhof** (der wichtigste Eisenbahnknotenpunkt Deutschlands) l
 - **Fahrrad:** Gut ausgebautes Radwegenetz entlang der Kanäle
 
 Das **Bundesministerium des Innern** hat seinen Berliner Dienstsitz in Moabit.
-""")
+""", """
+**Berlin Hauptbahnhof** (Germany's most important railway hub) lies on Moabit's eastern edge and offers excellent connections to the S-Bahn, U-Bahn, trams and long-distance trains. The government quarter is directly adjacent, as are Tiergarten and Charlottenburg.
+
+- **U-Bahn:** U9 (Turmstraße, Birkenstraße)
+- **S-Bahn / mainline rail:** Berlin Hbf, Bellevue
+- **Tram:** M10 (link to Prenzlauer Berg)
+- **Cycling:** a well-developed cycle network along the canals
+
+The **Federal Ministry of the Interior** has its Berlin seat in Moabit.
+"""))
 
 
     with col2:
-        st.subheader("Geschichte")
-        st.markdown("""
+        st.subheader(tr("Geschichte", "History"))
+        st.markdown(tr("""
 Im 13. Jahrhundert hieß das Gebiet noch *Große Stadtheide*, später *Kämmereiheide*. Die eigentliche Besiedlung begann **1685**, als Hugenotten (französische Glaubensflüchtlinge) hier angesiedelt wurden. Sie nannten ihre neue Heimat *terre de Moab*, nach dem biblischen Land Moab, der ersten Zufluchtsstätte der Israeliten nach dem Auszug aus Ägypten. 1716 entstand die Kolonie Moabit; 1801 zählte man erst 120 Bewohner.
 
 1818 entstand nördlich davon eine weitere Kolonie, die zur Unterscheidung den Namen **Neu-Moabit** erhielt. Mit der Industrialisierung folgte eine rasche Besiedlung beider Kolonien. **1861** wurde Moabit nach Berlin eingemeindet; bis 1910 war die Bevölkerung auf rund 190 000 angewachsen.
 
 Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassische Arbeiterviertel. Von **1920 bis 2000** gehörte Moabit zum Bezirk Tiergarten; seit der Bezirksfusion am 1. Januar 2001 ist es Ortsteil des neuen Bezirks Mitte.
-""")
+""", """
+In the 13th century the area was still called *Große Stadtheide*, later *Kämmereiheide*. Settlement proper began in **1685**, when Huguenots (French Protestant refugees) were settled here. They called their new home *terre de Moab*, after the biblical land of Moab, the Israelites' first place of refuge after the Exodus from Egypt. The colony of Moabit was founded in 1716; in 1801 it still had only 120 inhabitants.
+
+In 1818 a second colony was founded to the north and named **Neu-Moabit** to tell the two apart. Industrialisation brought rapid settlement of both colonies. In **1861** Moabit was incorporated into Berlin; by 1910 its population had grown to around 190,000.
+
+In the 19th century, factories belonging to AEG, Schwarzkopf and Löwe shaped this classic working-class district. From **1920 to 2000** Moabit belonged to the Tiergarten district; since the merger of districts on 1 January 2001 it has been a locality of the new Mitte district.
+"""))
 
         _pop_data = {1801: 120, 1840: 986, 1860: 8200, 1871: 14818, 1880: 29693, 1910: 190000}
         _fig_pop = go.Figure(go.Scatter(
@@ -1939,26 +2194,30 @@ Im 19. Jahrhundert prägten Fabriken von AEG, Schwarzkopf und Löwe das klassisc
             yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", tickformat=","),
             margin=dict(t=10, b=10, l=10, r=10),
             height=280,
+            separators=tr(",.", ".,"),
         )
-        st.plotly_chart(_fig_pop, use_container_width=True, config=_plot_config)
-        st.caption("Bevölkerungswachstum Moabits 1801–1910. Quellen: Volkszählungen, Berliner Morgenpost (2012).")
+        st.plotly_chart(_fig_pop, width="stretch", config=_plot_config)
+        st.caption(tr("Bevölkerungswachstum Moabits 1801–1910. Quellen: Volkszählungen, Berliner Morgenpost (2012).",
+                      "Moabit's population growth 1801–1910. Sources: censuses, Berliner Morgenpost (2012)."))
 
-    st.subheader("Kieze im Überblick")
-    st.markdown("""
+    st.subheader(tr("Kieze im Überblick", "Moabit's Kieze at a glance"))
+    st.markdown(tr("""
 Moabit hat keine festen amtlichen Kiezgrenzen; die Grenzen sind fließend. Historisch und städtebaulich werden jedoch sechs bis sieben Hauptkieze unterschieden:
-""")
+""", """
+Moabit has no fixed official Kiez boundaries; they shift depending on who you ask. Historically and in terms of urban development, however, six or seven main Kieze (neighbourhoods) are usually distinguished:
+"""))
 
     # Listed alphabetically. On desktop the i % 3 fill spreads them across three
     # columns so they still read alphabetically left-to-right; on a phone the
     # same list is simply stacked, which keeps that order intact.
     _KIEZE = [
-        ("Alt-Moabit & Turmstraße", "Die zentralen Lebensadern Moabits. Rund um das Schultheiss Quartier und den Kleinen Tiergarten konzentrieren sich Handel, Gastronomie und öffentliches Leben."),
-        ("Beusselkiez", "Traditionelles Arbeiter- und Wohnviertel im Nordwesten, geprägt von gründerzeitlicher Blockbebauung und einer starken Nachbarschaftsidentität."),
-        ("Europacity", "Moderne Erweiterung im östlichen Moabit, direkt am Hauptbahnhof. Bürobauten, Neubauwohnungen und Gewerbeflächen prägen dieses noch im Entstehen begriffene Stadtquartier."),
-        ("Huttenkiez", "Mischung aus Wohnen und Industrie entlang der Huttenstraße (auch als ‘Hutteninsel’ bekannt). Rauher Charme, aber zunehmend im Wandel."),
-        ("Lehrter-Straßen-Kiez", "Östliches Quartier zwischen Hauptbahnhof und Invalidenstraße, das sich in den vergangenen Jahren stark entwickelt hat."),
-        ("Stephankiez", "Einer der bekanntesten und besterhaltenen Gründerzeitkieze Berlins, rund um den Stephanplatz. Stuckfassaden, ruhige Straßen und eine entspannte, fast dörfliche Atmosphäre."),
-        ("Westfälisches Viertel", "Ruhiges, bürgerlich geprägtes Gründerzeitviertel im Südwesten. Breite Straßen, gepflegte Altbauten und eine entspannte Wohnatmosphäre."),
+        ("Alt-Moabit & Turmstraße", tr("Die zentralen Lebensadern Moabits. Rund um das Schultheiss Quartier und den Kleinen Tiergarten konzentrieren sich Handel, Gastronomie und öffentliches Leben.", "Moabit's main arteries. Shops, restaurants and public life are concentrated around the Schultheiss Quartier and the Kleiner Tiergarten.")),
+        ("Beusselkiez", tr("Traditionelles Arbeiter- und Wohnviertel im Nordwesten, geprägt von gründerzeitlicher Blockbebauung und einer starken Nachbarschaftsidentität.", "Traditional working-class residential area in the north-west, shaped by late-19th-century perimeter blocks and a strong neighbourhood identity.")),
+        ("Europacity", tr("Moderne Erweiterung im östlichen Moabit, direkt am Hauptbahnhof. Bürobauten, Neubauwohnungen und Gewerbeflächen prägen dieses noch im Entstehen begriffene Stadtquartier.", "Modern extension in eastern Moabit, right by the Hauptbahnhof. Office buildings, new flats and commercial space define this district, which is still taking shape.")),
+        ("Huttenkiez", tr("Mischung aus Wohnen und Industrie entlang der Huttenstraße (auch als ‘Hutteninsel’ bekannt). Rauher Charme, aber zunehmend im Wandel.", "A mix of housing and industry along Huttenstraße (also known as the ‘Hutteninsel’). Rough-edged charm, but changing fast.")),
+        ("Lehrter-Straßen-Kiez", tr("Östliches Quartier zwischen Hauptbahnhof und Invalidenstraße, das sich in den vergangenen Jahren stark entwickelt hat.", "Eastern quarter between the Hauptbahnhof and Invalidenstraße that has developed rapidly in recent years.")),
+        ("Stephankiez", tr("Einer der bekanntesten und besterhaltenen Gründerzeitkieze Berlins, rund um den Stephanplatz. Stuckfassaden, ruhige Straßen und eine entspannte, fast dörfliche Atmosphäre.", "One of Berlin's best-known and best-preserved late-19th-century (Gründerzeit) neighbourhoods, around Stephanplatz. Stucco façades, quiet streets and a relaxed, almost village-like atmosphere.")),
+        ("Westfälisches Viertel", tr("Ruhiges, bürgerlich geprägtes Gründerzeitviertel im Südwesten. Breite Straßen, gepflegte Altbauten und eine entspannte Wohnatmosphäre.", "Quiet, middle-class late-19th-century quarter in the south-west. Wide streets, well-kept period buildings and a relaxed residential atmosphere.")),
     ]
 
     def _kiez_html(name, desc, style):
@@ -1976,12 +2235,14 @@ Moabit hat keine festen amtlichen Kiezgrenzen; die Grenzen sind fließend. Histo
             with _kcols[_i % 3]:
                 st.markdown(_kiez_html(_name, _desc, _ks), unsafe_allow_html=True)
 
-    st.markdown("""
+    st.markdown(tr("""
 Darüber hinaus ist Moabit durch das Quartiersmanagement Berlin in zwei offizielle Fördergebiete eingeteilt: **Moabit-Ost** und **Beusselstraße/Moabit-West**. Diese Gebiete erhalten gezielte Förderung für soziale Infrastruktur, Nachbarschaftsprojekte und städtebauliche Entwicklung.
-""")
+""", """
+In addition, Berlin's neighbourhood management programme (Quartiersmanagement) divides Moabit into two official funding areas: **Moabit-Ost** and **Beusselstraße/Moabit-West**. These areas receive targeted funding for social infrastructure, neighbourhood projects and urban development.
+"""))
 
-    st.subheader("Orte, Essen & Kultur")
-    st.markdown("""
+    st.subheader(tr("Orte, Essen & Kultur", "Places, food & culture"))
+    st.markdown(tr("""
 - **Justizvollzugsanstalt Moabit** und das **Kriminalgericht Moabit**: das größte Kriminalgericht Europas
 - **Arminiusmarkthalle** (1891): historische Markthalle mit regionalem und internationalem Angebot; dazu Wochenmarkt Turmstraße (Di & Fr)
 - **Kleiner Tiergarten**: zentraler Stadtpark und soziales Zentrum rund um Alt-Moabit und Turmstraße, auch bekannt als sozialer Brennpunkt
@@ -1990,11 +2251,20 @@ Darüber hinaus ist Moabit durch das Quartiersmanagement Berlin in zwei offiziel
 - **Restaurants:** von türkischen Imbissen bis zur gehobenen Gastronomie
 - **Kultur:** Kunsthaus Moabit, freie Theater und Galerien
 - **Sport:** Schwimmbad Turmstraße, Sporthallen und Bolzplätze
-""")
+""", """
+- **Moabit prison (JVA Moabit)** and the **Moabit Criminal Court**: the largest criminal court in Europe
+- **Arminiusmarkthalle** (1891): historic market hall with regional and international produce; plus the Turmstraße weekly market (Tue & Fri)
+- **Kleiner Tiergarten**: central park and social hub around Alt-Moabit and Turmstraße, also known as a social hotspot
+- **Fritz-Schloß-Park**: Moabit's largest green space, laid out on a former parade ground
+- **Spreebogenpark**: with a direct view of the Reichstag; canal promenades along all four waterways
+- **Restaurants:** from Turkish snack bars to fine dining
+- **Culture:** Kunsthaus Moabit, independent theatres and galleries
+- **Sport:** Turmstraße swimming pool, sports halls and kickabout pitches
+"""))
 
     st.divider()
-    st.subheader("Quellen")
-    st.markdown("""
+    st.subheader(tr("Quellen", "Sources"))
+    st.markdown(tr("""
 - Bezirksamt Mitte: [Ortsteil Moabit](https://www.berlin.de/ba-mitte/ueber-den-bezirk/ortsteile/moabit/)
 - Amt für Statistik Berlin-Brandenburg: Volkszählungen und Einwohnerregister
 - Wikipedia: [Moabit](https://de.wikipedia.org/wiki/Moabit)
@@ -2004,4 +2274,14 @@ Darüber hinaus ist Moabit durch das Quartiersmanagement Berlin in zwei offiziel
 - [Moazin](https://www.moazin.de/) — Magazin für und über Moabit
 - [Gebietsinformation Turmstraße](https://www.turmstrasse.de/gebiete/gebietsinformation) — Quartiersmanagement Turmstraße
 - Berliner Morgenpost, 2. November 2012: „Kiez im Wandel und Aufbruch“ (Anzeigensonderveröffentlichung)
-""")
+""", """
+- Mitte District Office: [Moabit locality](https://www.berlin.de/ba-mitte/ueber-den-bezirk/ortsteile/moabit/) (German)
+- Statistical Office for Berlin-Brandenburg: censuses and population register
+- Wikipedia: [Moabit](https://de.wikipedia.org/wiki/Moabit) (German edition)
+- OpenStreetMap: geodata for Moabit
+- Quartiersmanagement Berlin: [Moabit-Ost](https://www.qm-moabit-ost.de/) and [Beusselstraße/Moabit-West](https://www.stattbau.de/projekte/qm-beusselstrasse/)
+- [Moabit Online](https://moabitonline.de/moabit), local news site
+- [Moazin](https://www.moazin.de/), a magazine for and about Moabit
+- [Gebietsinformation Turmstraße](https://www.turmstrasse.de/gebiete/gebietsinformation), Turmstraße neighbourhood management
+- Berliner Morgenpost, 2 November 2012: „Kiez im Wandel und Aufbruch“ (advertising supplement)
+"""))
