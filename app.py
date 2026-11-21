@@ -12,6 +12,8 @@ import streamlit as st
 os.chdir(pathlib.Path(__file__).parent)
 import folium
 from folium.plugins import MarkerCluster, FastMarkerCluster, LocateControl
+from folium.template import Template
+from branca.element import MacroElement
 from streamlit_folium import st_folium
 
 import plotly.graph_objects as go
@@ -159,6 +161,63 @@ def tr_country(name):
 def tr_species(name):
     """English common name for a German tree species, if known and English is active."""
     return SPECIES_EN.get(name, name) if LANG == "en" else name
+
+
+# --- Noise legend (shared by the sidebar and the on-map legend) ---------------------
+# Items are (kind, colour, label): kind "box" = filled square (2022 raster classes),
+# "none" = hollow square for the class the map leaves uncoloured, "line" = line
+# symbol (2004 draws coloured street/rail lines).
+
+def _swatch_html(kind, colour, size="0.75em"):
+    if kind == "line":
+        return (f'<span style="display:inline-block;width:1.4em;height:0.22em;background:{colour};'
+                f'vertical-align:0.2em;margin-right:0.35em"></span>')
+    if kind == "none":
+        return (f'<span style="display:inline-block;width:{size};height:{size};box-sizing:border-box;'
+                f'border:1px solid rgba(250,250,250,0.6);vertical-align:-0.05em;margin-right:0.35em"></span>')
+    return (f'<span style="display:inline-block;width:{size};height:{size};background:{colour};'
+            f'vertical-align:-0.05em;margin-right:0.35em"></span>')
+
+
+def _legend_rows_html(items):
+    return "".join(f"<div>{_swatch_html(k, c)}{label}</div>" for k, c, label in items)
+
+
+class _MapLegend(MacroElement):
+    """Legend box that belongs to a feature group.
+
+    st_folium swaps feature groups without rebuilding the map. A plain Leaflet
+    control would survive that swap (controls are not layers), so the control is
+    wrapped in a tiny layer that adds it when its group joins the map and
+    removes it when the group is removed. The legend therefore changes with the
+    noise year/options without resetting the view.
+    """
+
+    _template = Template("""
+        {% macro script(this, kwargs) %}
+        var {{ this.get_name() }} = (function () {
+            var control = L.control({position: "bottomleft"});
+            control.onAdd = function () {
+                var div = L.DomUtil.create("div");
+                div.innerHTML = {{ this.html|tojson }};
+                L.DomEvent.disableClickPropagation(div);
+                L.DomEvent.disableScrollPropagation(div);
+                return div;
+            };
+            var Holder = L.Layer.extend({
+                onAdd: function (map) { control.addTo(map); },
+                onRemove: function (map) { control.remove(); }
+            });
+            return new Holder();
+        })();
+        {{ this._parent.get_name() }}.addLayer({{ this.get_name() }});
+        {% endmacro %}
+    """)
+
+    def __init__(self, html):
+        super().__init__()
+        self._name = "MapLegend"
+        self.html = html
 
 
 def _tr_delay(text):
@@ -487,10 +546,12 @@ if show_noise:
                                         horizontal=True, key="noise_time")
         noise_layer  = NOISE_WMS_LAYERS[(noise_source, noise_time)]
         _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> " + tr("(22–6 Uhr)", "(10 pm–6 am)")
-        legend_html = "".join(
-            f'<span style="color:{colour}">&#9632;</span> {band} dB(A)<br>'
-            for band, colour in NOISE_LEGEND[noise_time]
-        )
+        _bands = NOISE_LEGEND[noise_time]
+        # The lowest class is transparent on the map (see layers.noise.sld_body),
+        # so the legend says so instead of showing the official white swatch.
+        _noise_items = [("none", None, f"{_bands[0][0]} dB(A) ({tr('nicht eingefärbt', 'not coloured')})")] + [
+            ("box", colour, f"{band} dB(A)") for band, colour in _bands[1:]
+        ]
         _noise_source_line = tr("Quelle: Strategische Lärmkarten Berlin 2022", "Source: Berlin strategic noise maps 2022")
     else:
         noise_source = st.sidebar.radio(tr("Quelle", "Source"), ["Straße", "Schiene"],
@@ -499,12 +560,21 @@ if show_noise:
                                         horizontal=True, key="noise_time_2004")
         noise_layer  = NOISE04_WMS_LAYERS[(noise_source, noise_time)]
         _metric = tr("Tag (6–22 Uhr)", "Day (6 am–10 pm)") if noise_time == "Tag" else tr("Nacht (22–6 Uhr)", "Night (10 pm–6 am)")
-        legend_html = "".join(
-            f'<span style="color:{colour}"><b>&#11834;</b></span> {band} dB(A)<br>'
-            for band, colour in NOISE04_LEGEND
-        ) + f'<span style="color:{NOISE04_UNRATED}"><b>&#11834;</b></span> {tr("ohne Bewertung", "not rated")}<br>'
+        _noise_items = [("line", colour, f"{band} dB(A)") for band, colour in NOISE04_LEGEND] + [
+            ("line", NOISE04_UNRATED, tr("ohne Bewertung", "not rated"))
+        ]
         _noise_source_line = tr("Quelle: Umweltatlas Berlin 2004", "Source: Berlin Environmental Atlas 2004")
-    st.sidebar.markdown(f"<small>{_metric}<br>{legend_html}{_noise_source_line}</small>", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        f"<small>{_metric}{_legend_rows_html(_noise_items)}{_noise_source_line}</small>",
+        unsafe_allow_html=True,
+    )
+    # Same legend on the map, next to the colours it explains.
+    _map_legend_html = (
+        '<div style="background:rgba(14,17,23,0.88);color:#fafafa;padding:6px 9px;border-radius:6px;'
+        f'font:{11 if _is_mobile else 12}px/1.45 sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.5)">'
+        f'<div style="font-weight:600;margin-bottom:2px">{tr("Lärm", "Noise")} {noise_year} · {_metric}</div>'
+        f"{_legend_rows_html(_noise_items)}</div>"
+    )
 
 # --- Tabs ---
 tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs([
@@ -801,6 +871,7 @@ with tab_map:
             attr=tr("Strategische Lärmkarten Berlin 2022", "Berlin strategic noise maps 2022"),
             opacity=0.7,
         ).add_to(_g)
+        _MapLegend(_map_legend_html).add_to(_g)
     elif show_noise:
         _g = _fg("Lärm 2004")
         # 2004 is drawn as coloured street/rail lines on a transparent background,
@@ -814,6 +885,7 @@ with tab_map:
             attr=tr("Umweltatlas Berlin 2004", "Berlin Environmental Atlas 2004"),
             opacity=0.8,
         ).add_to(_g)
+        _MapLegend(_map_legend_html).add_to(_g)
 
     if show_trees:
         _g = _fg("Bäume")
