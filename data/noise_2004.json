@@ -1,0 +1,123 @@
+{
+  "metrics": {
+    "n_sections": 311,
+    "median_day": 68.3,
+    "median_night": 62.2,
+    "over65_day_pct": 80.1,
+    "over55_night_pct": 86.2
+  },
+  "dist": {
+    "day": {
+      "< 45": 0,
+      "45–49": 0,
+      "50–54": 14,
+      "55–59": 25,
+      "60–64": 23,
+      "65–69": 168,
+      "70–74": 80,
+      "≥ 75": 1
+    },
+    "night": {
+      "< 45": 2,
+      "45–49": 16,
+      "50–54": 25,
+      "55–59": 40,
+      "60–64": 169,
+      "65–69": 59,
+      "70–74": 0,
+      "≥ 75": 0
+    }
+  },
+  "streets": [
+    {
+      "street": "Stromstraße",
+      "day": 72.4,
+      "sections": 11
+    },
+    {
+      "street": "Beusselstraße",
+      "day": 72.3,
+      "sections": 20
+    },
+    {
+      "street": "Heidestraße",
+      "day": 69.8,
+      "sections": 5
+    },
+    {
+      "street": "Sickingenstraße",
+      "day": 69.4,
+      "sections": 12
+    },
+    {
+      "street": "Kaiserin-Augusta-Allee",
+      "day": 69.2,
+      "sections": 10
+    },
+    {
+      "street": "Levetzowstraße",
+      "day": 69.1,
+      "sections": 8
+    },
+    {
+      "street": "Quitzowstraße",
+      "day": 68.9,
+      "sections": 18
+    },
+    {
+      "street": "Siemensstraße",
+      "day": 68.9,
+      "sections": 10
+    },
+    {
+      "street": "Perleberger Straße",
+      "day": 68.6,
+      "sections": 21
+    },
+    {
+      "street": "Turmstraße",
+      "day": 68.5,
+      "sections": 30
+    },
+    {
+      "street": "Paulstraße",
+      "day": 68.5,
+      "sections": 8
+    },
+    {
+      "street": "Alt-Moabit",
+      "day": 67.7,
+      "sections": 42
+    },
+    {
+      "street": "Huttenstraße",
+      "day": 67,
+      "sections": 11
+    },
+    {
+      "street": "Rathenower Straße",
+      "day": 66.9,
+      "sections": 16
+    },
+    {
+      "street": "Invalidenstraße",
+      "day": 66.7,
+      "sections": 16
+    },
+    {
+      "street": "Seestraße",
+      "day": 66.6,
+      "sections": 5
+    },
+    {
+      "street": "Gotzkowskystraße",
+      "day": 66.3,
+      "sections": 6
+    },
+    {
+      "street": "Wiebestraße",
+      "day": 65.5,
+      "sections": 8
+    }
+  ]
+}

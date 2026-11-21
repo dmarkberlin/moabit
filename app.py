@@ -29,6 +29,10 @@ from layers.noise import (
     WMS_URL as NOISE_WMS_URL, WMS_LAYERS as NOISE_WMS_LAYERS, LEGEND as NOISE_LEGEND,
     sld_body as noise_sld_body,
 )
+from layers.noise_2004 import (
+    fetch_noise_2004, WMS_URL as NOISE04_WMS_URL, WMS_LAYERS as NOISE04_WMS_LAYERS,
+    LEGEND as NOISE04_LEGEND, LEGEND_UNRATED_COLOUR as NOISE04_UNRATED,
+)
 from layers.crime import fetch_crime_data, fetch_crime_data_by_area, fetch_bezirk_comparison, fetch_mitte_lor_data, CATEGORIES, DEFAULT_CATEGORIES
 from layers.airquality import (
     fetch_current, fetch_history,
@@ -100,7 +104,7 @@ _LABEL_EN = {
     "Straßenbaum": "Street tree", "Anlagenbaum": "Park tree",
     # noise map options
     "Gesamt": "All sources", "Straße": "Road", "Tram & U-Bahn": "Tram & U-Bahn",
-    "24 h": "24 h", "Nacht": "Night",
+    "24 h": "24 h", "Nacht": "Night", "Schiene": "Rail", "Tag": "Day",
     # air quality: pollutant label (German decimal comma) and UBA index
     "PM₂,₅": "PM₂.₅",
     "sehr gut": "very good", "gut": "good", "mäßig": "moderate",
@@ -219,6 +223,10 @@ def get_bikeshare_stations():
 @st.cache_data(ttl=86400)
 def get_noise_data():
     return fetch_noise_data()
+
+@st.cache_data(ttl=86400)
+def get_noise_2004():
+    return fetch_noise_2004()
 
 @st.cache_data(ttl=3600)
 def get_airquality_current():
@@ -465,25 +473,38 @@ if show_trees:
         unsafe_allow_html=True,
     )
 show_airquality = st.sidebar.checkbox(tr("Luftqualität", "Air quality"), value=False, key="lyr_airquality")
-show_noise = st.sidebar.checkbox(tr("Lärmkarte (2022)", "Noise map (2022)"), value=False, key="lyr_noise")
+show_noise = st.sidebar.checkbox(tr("Lärmkarte", "Noise map"), value=False, key="lyr_noise")
+noise_year = "2022"
 noise_layer = NOISE_WMS_LAYERS[("Gesamt", "24 h")]
 if show_noise:
-    # Option values stay German (they key NOISE_WMS_LAYERS); only the display is translated.
-    noise_source = st.sidebar.radio(tr("Quelle", "Source"), ["Gesamt", "Straße", "Tram & U-Bahn"],
-                                    format_func=trl, key="noise_source")
-    noise_time   = st.sidebar.radio(tr("Zeit", "Time"), ["24 h", "Nacht"], format_func=trl,
-                                    horizontal=True, key="noise_time")
-    noise_layer  = NOISE_WMS_LAYERS[(noise_source, noise_time)]
-    _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> " + tr("(22–6 Uhr)", "(10 pm–6 am)")
-    legend_html = "".join(
-        f'<span style="color:{colour}">&#9632;</span> {band} dB(A)<br>'
-        for band, colour in NOISE_LEGEND[noise_time]
-    )
-    st.sidebar.markdown(
-        f"<small>{_metric}<br>{legend_html}"
-        f"{tr('Quelle: Strategische Lärmkarten Berlin 2022', 'Source: Berlin strategic noise maps 2022')}</small>",
-        unsafe_allow_html=True,
-    )
+    noise_year = st.sidebar.radio(tr("Jahr", "Year"), ["2022", "2004"], horizontal=True, key="noise_year")
+    # Option values stay German (they key the WMS_LAYERS dicts); only the display is
+    # translated. Each year has its own option set, hence separate widget keys.
+    if noise_year == "2022":
+        noise_source = st.sidebar.radio(tr("Quelle", "Source"), ["Gesamt", "Straße", "Tram & U-Bahn"],
+                                        format_func=trl, key="noise_source")
+        noise_time   = st.sidebar.radio(tr("Zeit", "Time"), ["24 h", "Nacht"], format_func=trl,
+                                        horizontal=True, key="noise_time")
+        noise_layer  = NOISE_WMS_LAYERS[(noise_source, noise_time)]
+        _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> " + tr("(22–6 Uhr)", "(10 pm–6 am)")
+        legend_html = "".join(
+            f'<span style="color:{colour}">&#9632;</span> {band} dB(A)<br>'
+            for band, colour in NOISE_LEGEND[noise_time]
+        )
+        _noise_source_line = tr("Quelle: Strategische Lärmkarten Berlin 2022", "Source: Berlin strategic noise maps 2022")
+    else:
+        noise_source = st.sidebar.radio(tr("Quelle", "Source"), ["Straße", "Schiene"],
+                                        format_func=trl, horizontal=True, key="noise_source_2004")
+        noise_time   = st.sidebar.radio(tr("Zeit", "Time"), ["Tag", "Nacht"], format_func=trl,
+                                        horizontal=True, key="noise_time_2004")
+        noise_layer  = NOISE04_WMS_LAYERS[(noise_source, noise_time)]
+        _metric = tr("Tag (6–22 Uhr)", "Day (6 am–10 pm)") if noise_time == "Tag" else tr("Nacht (22–6 Uhr)", "Night (10 pm–6 am)")
+        legend_html = "".join(
+            f'<span style="color:{colour}"><b>&#11834;</b></span> {band} dB(A)<br>'
+            for band, colour in NOISE04_LEGEND
+        ) + f'<span style="color:{NOISE04_UNRATED}"><b>&#11834;</b></span> {tr("ohne Bewertung", "not rated")}<br>'
+        _noise_source_line = tr("Quelle: Umweltatlas Berlin 2004", "Source: Berlin Environmental Atlas 2004")
+    st.sidebar.markdown(f"<small>{_metric}<br>{legend_html}{_noise_source_line}</small>", unsafe_allow_html=True)
 
 # --- Tabs ---
 tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs([
@@ -534,13 +555,15 @@ with tab_map:
             with st.spinner(tr("Lade Verkehrslinien...", "Loading public transport lines…")):
                 routes = get_routes()
 
-    if "map_center" not in st.session_state:
-        st.session_state.map_center = [52.529, 13.341]
-    if "map_zoom" not in st.session_state:
-        st.session_state.map_zoom = 13 if _is_mobile else 14
-    if show_airquality and not st.session_state.get("_prev_airquality", False):
-        st.session_state.map_zoom = max(st.session_state.map_zoom - 1, 10)
-    st.session_state._prev_airquality = show_airquality
+    # Computed fresh on every run, not stored: the previous version decremented a
+    # zoom kept in session state each time air quality was switched on and never
+    # restored it, so the map zoomed out one more level with every toggle.
+    _map_centre = [52.529, 13.341]
+    _base_zoom = 13 if _is_mobile else 14
+    # One level out while air quality is on, so the Wedding station is in view.
+    # Passed to st_folium(zoom=...), which applies it only when it changes, so it
+    # neither rebuilds the map nor overrides the user's zoom on other reruns.
+    _map_zoom = _base_zoom - 1 if show_airquality else _base_zoom
 
     # CARTO basemap tiles need an API key (free for non-commercial use up to
     # 5M requests/month, see carto.com/basemaps/apikey). The key lives in
@@ -562,8 +585,8 @@ with tab_map:
         _basemap = dict(tiles="OpenStreetMap")
 
     m = folium.Map(
-        location=st.session_state.map_center,
-        zoom_start=st.session_state.map_zoom,
+        location=_map_centre,
+        zoom_start=_base_zoom,
         **_basemap,
     )
 
@@ -577,7 +600,24 @@ with tab_map:
         }
     ).add_to(m)
 
+    # Optional layers go into feature groups passed to st_folium(feature_group_to_add=...).
+    # st_folium identifies the map by a hash of the *base* map's script; while that
+    # stays identical it swaps the feature groups inside the existing Leaflet map
+    # instead of rebuilding it, so pan and zoom survive layer toggles and the noise
+    # year switch. Only what never changes belongs on `m` itself.
+    _layers = []
+
+    def _fg(name):
+        fg = folium.FeatureGroup(name=name)
+        _layers.append(fg)
+        return fg
+
+    # Plugin scripts are only loaded on the map's first render, so the marker-
+    # cluster script (stops, trees) must be part of the base map from the start.
+    MarkerCluster(name="_cluster_script").add_to(m)
+
     if show_greenspaces:
+        _g = _fg("Grünflächen")
         # Tooltip shows a translated label rather than the raw OSM value in "type".
         _green_features = [
             {**f, "properties": {**f["properties"],
@@ -595,9 +635,10 @@ with tab_map:
                 fields=["name", "type_label"],
                 aliases=["Name:", tr("Typ:", "Type:")],
             ),
-        ).add_to(m)
+        ).add_to(_g)
 
     if show_amenities:
+        _g = _fg("Nahversorgung")
         for feature in amenities:
             amenity = feature["amenity"]
             style = AMENITY_STYLE.get(amenity, {"colour": "#888888", "label": amenity})
@@ -612,9 +653,10 @@ with tab_map:
                 fill_opacity=0.9,
                 weight=1.5,
                 tooltip=tooltip,
-            ).add_to(m)
+            ).add_to(_g)
 
     if show_routes:
+        _g = _fg("Verkehrslinien")
         # Resolve from ROUTE_STYLE rather than the "colour"/"weight"/"opacity"
         # baked into routes.json, so the committed caches stay geometry and a
         # palette change takes effect without regenerating them.
@@ -632,9 +674,10 @@ with tab_map:
                 fields=["ref", "name"],
                 aliases=[tr("Linie:", "Line:"), "Route:"],
             ),
-        ).add_to(m)
+        ).add_to(_g)
 
     if show_cycling:
+        _g = _fg("Radwege")
         cycle_features = []
         for el in lanes:
             if el.get("type") != "way" or "geometry" not in el:
@@ -657,9 +700,10 @@ with tab_map:
                 "opacity": 0.8,
             },
             tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=[tr("Radweg:", "Cycle lane:")]),
-        ).add_to(m)
+        ).add_to(_g)
 
     if show_bikeshare:
+        _g = _fg("Leihräder")
         for station in bikeshare_stations:
             folium.Marker(
                 location=[station["lat"], station["lon"]],
@@ -672,9 +716,10 @@ with tab_map:
                     f"{tr('Kapazität', 'Capacity')}: {station['capacity']}"
                     f"</span>"
                 ),
-            ).add_to(m)
+            ).add_to(_g)
 
     if show_wohnlagen:
+        _g = _fg("Wohnlagen")
         wol_colours = {k: v["colour"] for k, v in WOL_STYLE.items()}
 
         _wol_features = [
@@ -697,10 +742,11 @@ with tab_map:
                 fields=["strasse", "hnr", "wol_label"],
                 aliases=[tr("Straße:", "Street:"), tr("Nr.:", "No.:"), tr("Wohnlage:", "Rating:")],
             ),
-        ).add_to(m)
+        ).add_to(_g)
 
     if show_transport:
-        cluster = MarkerCluster(name="Transport stops").add_to(m)
+        _g = _fg("Haltestellen")
+        cluster = MarkerCluster(name="Transport stops").add_to(_g)
         for stop in stops:
             name   = stop["name"]
             style  = stop_style(stop)
@@ -714,6 +760,7 @@ with tab_map:
         st.session_state.selected_stop = None
 
     if show_airquality:
+        _g = _fg("Luftqualität")
         with st.spinner(tr("Lade Luftqualitätsdaten...", "Loading air quality data…")):
             aq_current = get_airquality_current()
         readings = "<br>".join(
@@ -728,7 +775,7 @@ with tab_map:
                 f"<b>{STATION_NAME}</b><br>{readings}"
                 f"</span>"
             ),
-        ).add_to(m)
+        ).add_to(_g)
         for s in MOABIT_STATIONS:
             folium.Marker(
                 location=[s["lat"], s["lon"]],
@@ -739,9 +786,10 @@ with tab_map:
                     "<br>" + s['years'] + " · " + tr("Keine Daten verfügbar", "No data available") +
                     "</span>"
                 ),
-            ).add_to(m)
+            ).add_to(_g)
 
-    if show_noise:
+    if show_noise and noise_year == "2022":
+        _g = _fg("Lärm 2022")
         folium.WmsTileLayer(
             # sld_body goes in the base URL: folium camelCases keyword options
             # (sld_body -> sldBody), which the server silently ignores.
@@ -752,9 +800,23 @@ with tab_map:
             version="1.3.0",
             attr=tr("Strategische Lärmkarten Berlin 2022", "Berlin strategic noise maps 2022"),
             opacity=0.7,
-        ).add_to(m)
+        ).add_to(_g)
+    elif show_noise:
+        _g = _fg("Lärm 2004")
+        # 2004 is drawn as coloured street/rail lines on a transparent background,
+        # so it needs no restyling.
+        folium.WmsTileLayer(
+            url=NOISE04_WMS_URL,
+            layers=noise_layer,
+            fmt="image/png",
+            transparent=True,
+            version="1.3.0",
+            attr=tr("Umweltatlas Berlin 2004", "Berlin Environmental Atlas 2004"),
+            opacity=0.8,
+        ).add_to(_g)
 
     if show_trees:
+        _g = _fg("Bäume")
         # folium wraps a custom callback as `var callback = <fn>;`, so pass the bare function.
         # ~10,000 trees: FastMarkerCluster ships the rows as one array and builds
         # the markers in the browser, which stays responsive where one Python
@@ -806,7 +868,7 @@ with tab_map:
             icon_create_function=_tree_cluster_icon,
             options={"disableClusteringAtZoom": 18, "chunkedLoading": True, "showCoverageOnHover": False},
             name="Bäume",
-        ).add_to(m)
+        ).add_to(_g)
 
     LocateControl(
         auto_start=False,
@@ -825,6 +887,8 @@ with tab_map:
         # viewport and not rerunning are mutually exclusive with this component,
         # so the map resets to the default view when the script reruns.
         returned_objects=["last_object_clicked"],
+        feature_group_to_add=_layers or None,
+        zoom=_map_zoom,
         key="moabit_map",
     )
 
@@ -1581,6 +1645,100 @@ with tab_umwelt:
                 "trigger value (all noise sources). In the health-risk range "
                 f"(≥ {_h['den']} / {_h['n']} dB(A), 24 h / night): {_fac_health}. "
                 "Buildings as mapped for the 2022 noise maps, without names; one site can comprise several buildings.",
+            ))
+
+    # --- Road noise 2004, for comparison ---
+    st.divider()
+    st.subheader(tr("Zum Vergleich: Straßenverkehrslärm 2004 (Umweltatlas Berlin)",
+                    "For comparison: road traffic noise 2004 (Berlin Environmental Atlas)"))
+    st.caption(tr(
+        "2004 wurde jeder Straßenabschnitt nach seinem Pegel an der Bebauungskante bewertet, also nur "
+        "straßenseitig, getrennt nach Tag (6–22 Uhr) und Nacht (22–6 Uhr). Die Fassadenstatistik von 2022 "
+        "oben schließt dagegen auch Hof- und Rückseiten ein und nutzt LDEN, sodass die Gesamtzahlen nicht "
+        "vergleichbar sind. Am ehesten vergleichbar sind die lautesten Hauptstraßen beider Jahre. "
+        "Quelle: Senatsverwaltung für Stadtentwicklung, Umweltatlas Berlin 2004.",
+        "In 2004 each street section was rated by its level at the building line, i.e. on the street side "
+        "only, separately for day (6 am–10 pm) and night (10 pm–6 am). The 2022 façade statistics above also "
+        "include courtyard and rear façades and use LDEN, so the overall figures are not comparable. The "
+        "loudest main roads of the two years are the closest like-for-like comparison. "
+        "Source: Senate Department for Urban Development, Berlin Environmental Atlas 2004.",
+    ))
+    try:
+        noise04 = get_noise_2004()
+    except Exception as e:
+        st.error(tr("Lärmdaten 2004 konnten nicht geladen werden", "Could not load 2004 noise data") + f": {e}")
+        noise04 = None
+
+    if noise04:
+        m04 = noise04["metrics"]
+        _n04_items = [
+            (tr("Straßenabschnitte", "Street sections"), _fmt_int(m04["n_sections"])),
+            (tr("Median Tag", "Median day"),             f"{_fmt_float(m04['median_day'])} dB(A)"),
+            (tr("Median Nacht", "Median night"),         f"{_fmt_float(m04['median_night'])} dB(A)"),
+            (tr("Tag ≥ 65 dB(A)", "Day ≥ 65 dB(A)"),     _fmt_pct(m04["over65_day_pct"])),
+        ]
+        if _is_mobile:
+            _metrics_2col([{"label": l, "value": v} for l, v in _n04_items])
+        else:
+            for col, (label, value) in zip(st.columns(4), _n04_items):
+                col.metric(label, value)
+
+        if _is_mobile:
+            col_d04, col_t04 = st.container(), st.container()
+        else:
+            col_d04, col_t04 = st.columns(2)
+
+        with col_d04:
+            st.subheader(tr("Pegelverteilung 2004: Tag vs. Nacht", "Level distribution 2004: day vs. night"))
+            fig_d04 = go.Figure()
+            for key, label, colour in [("night", tr("Nacht", "Night"), "#1E88E5"), ("day", tr("Tag", "Day"), "#C0504D")]:
+                fig_d04.add_trace(go.Bar(
+                    name=label,
+                    x=DB_BANDS,
+                    y=[noise04["dist"][key][b] for b in DB_BANDS],
+                    marker_color=colour,
+                ))
+            fig_d04.update_layout(
+                barmode="group",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)",
+                           title=tr("Anzahl Straßenabschnitte", "Number of street sections")),
+                xaxis_title=tr("Pegelklasse (dB(A))", "Level band (dB(A))"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=20),
+                height=380,
+            )
+            st.plotly_chart(fig_d04, width="stretch", config=_plot_config)
+
+        with col_t04:
+            st.subheader(tr("Lauteste Straßen 2004 (Tag)", "Loudest streets 2004 (day)"))
+            top04 = sorted(noise04["streets"][:10], key=lambda r: r["day"])
+            fig_t04 = go.Figure(go.Bar(
+                x=[r["day"] for r in top04],
+                y=[f"{r['street']} ({r['sections']})" for r in top04],
+                orientation="h",
+                marker_color=[
+                    "#C0504D" if r["day"] >= 70 else "#FB8C00" if r["day"] >= 65 else "#FFB300"
+                    for r in top04
+                ],
+                text=[_fmt_float(r["day"]) for r in top04],
+                textposition="outside",
+            ))
+            fig_t04.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="dB(A)"),
+                xaxis_range=[55, 78],
+                margin=dict(t=40, b=20, r=60),
+                height=380,
+            )
+            st.plotly_chart(fig_t04, width="stretch", config=_plot_config)
+            st.caption(tr(
+                "Median der Tagespegel je Straße (mind. 5 bewertete Abschnitte; Anzahl in Klammern). "
+                "Gleiche Farbstufen wie 2022 (orange ab 65, rot ab 70 dB(A)), hier auf den Tagespegel angewandt.",
+                "Median day level per street (at least 5 rated sections; count in brackets). "
+                "Same colour steps as 2022 (orange from 65, red from 70 dB(A)), applied here to the day level.",
             ))
 
     # --- Trees section ---
