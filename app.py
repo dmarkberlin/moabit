@@ -10,7 +10,7 @@ import streamlit as st
 
 os.chdir(pathlib.Path(__file__).parent)
 import folium
-from folium.plugins import MarkerCluster, LocateControl
+from folium.plugins import MarkerCluster, FastMarkerCluster, LocateControl
 from streamlit_folium import st_folium
 
 import plotly.graph_objects as go
@@ -19,6 +19,7 @@ from layers.cycling import fetch_cycle_lanes, lane_style, LEGEND as CYCLE_LEGEND
 from layers.wohnlagen import fetch_wohnlagen, WOL_STYLE
 from layers.rent import YEARS as IBB_YEARS, ASKING_RENTS, BERLIN_MEDIAN_KEY
 from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND
+from layers.trees import fetch_trees, TREE_TYPES
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, ROUTE_STYLE, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
@@ -92,6 +93,10 @@ def get_wohnlagen():
 @st.cache_data(ttl=86400)
 def get_greenspaces():
     return fetch_greenspaces()
+
+@st.cache_data(ttl=86400)
+def get_trees():
+    return fetch_trees()
 
 @st.cache_data(ttl=86400)
 def get_amenities():
@@ -343,6 +348,16 @@ if show_greenspaces:
         for label, colour in GREEN_LEGEND.items()
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
+show_trees = st.sidebar.checkbox("Bäume", value=False)
+if show_trees:
+    legend_html = "".join(
+        f'<span style="color:{t["colour"]}">&#9679;</span> {t["label"]}<br>'
+        for t in TREE_TYPES.values()
+    )
+    st.sidebar.markdown(
+        f"<small>{legend_html}Quelle: Baumbestand Berlin (GRIS)</small>",
+        unsafe_allow_html=True,
+    )
 show_airquality = st.sidebar.checkbox("Luftqualität", value=False)
 show_noise = st.sidebar.checkbox("Lärmkarte (2022)", value=False)
 noise_layer = NOISE_WMS_LAYERS[("Gesamt", "24 h")]
@@ -384,6 +399,10 @@ with tab_map:
     if show_greenspaces:
         with st.spinner("Lade Grünflächen..."):
             greenspaces = get_greenspaces()
+
+    if show_trees:
+        with st.spinner("Lade Baumbestand..."):
+            trees = get_trees()
 
     if show_amenities:
         with st.spinner("Lade Nahversorgung..."):
@@ -602,6 +621,56 @@ with tab_map:
             version="1.3.0",
             attr="Strategische Lärmkarten Berlin 2022",
             opacity=0.7,
+        ).add_to(m)
+
+    if show_trees:
+        # folium wraps a custom callback as `var callback = <fn>;`, so pass the bare function.
+        # ~10,000 trees: FastMarkerCluster ships the rows as one array and builds
+        # the markers in the browser, which stays responsive where one Python
+        # folium.Marker per tree would not. Row layout: layers.trees.FIELDS.
+        _tree_colours = json.dumps({k: v["colour"] for k, v in TREE_TYPES.items()})
+        _tree_labels = json.dumps({k: v["label"] for k, v in TREE_TYPES.items()}, ensure_ascii=False)
+        _tree_callback = (
+            "function (row) {"
+            "  var esc = function (v) { return String(v).replace(/[&<>\"]/g, function (c) {"
+            "    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;'}[c]; }); };"
+            f"  var colours = {_tree_colours}, labels = {_tree_labels};"
+            "  var c = colours[row[2]];"
+            "  var m = L.circleMarker(new L.LatLng(row[0], row[1]),"
+            "    {radius: 5, color: c, fillColor: c, fillOpacity: 0.85, weight: 1});"
+            "  var h = '<span style=\"font-size:14px\"><b>' + esc(row[3]) + '</b>';"
+            "  if (row[4]) h += '<br><i>' + esc(row[4]) + '</i>';"
+            "  if (row[5]) h += '<br>Gepflanzt ' + row[5] + ' (' + (new Date().getFullYear() - row[5]) + ' Jahre)';"
+            "  var dims = [];"
+            "  if (row[6]) dims.push('Höhe ' + row[6] + ' m');"
+            "  if (row[7]) dims.push('Stamm ' + row[7] + ' cm');"
+            "  if (row[8]) dims.push('Krone ' + row[8] + ' m');"
+            "  if (dims.length) h += '<br>' + dims.join(' · ');"
+            "  if (row[9]) h += '<br>' + esc(row[9]) + (row[10] ? ' ' + esc(row[10]) : '');"
+            "  h += '<br><small>' + labels[row[2]] + '</small></span>';"
+            "  m.bindTooltip(h);"
+            "  return m;"
+            "}"
+        )
+        # Green cluster bubbles, so tree clusters can't be mistaken for the
+        # transport-stop clusters (Leaflet's default green/yellow/orange).
+        _tree_cluster_icon = (
+            "function (cluster) {"
+            "  var n = cluster.getChildCount();"
+            "  var size = n < 100 ? 30 : n < 1000 ? 38 : 46;"
+            "  return L.divIcon({"
+            "    html: '<div style=\"width:' + size + 'px;height:' + size + 'px;line-height:' + size + 'px;'"
+            "      + 'border-radius:50%;background:rgba(67,160,71,0.85);border:2px solid #B6E880;'"
+            "      + 'color:#fff;font:bold 12px sans-serif;text-align:center\">' + n + '</div>',"
+            "    className: 'tree-cluster', iconSize: L.point(size, size)});"
+            "}"
+        )
+        FastMarkerCluster(
+            data=trees,
+            callback=_tree_callback,
+            icon_create_function=_tree_cluster_icon,
+            options={"disableClusteringAtZoom": 18, "chunkedLoading": True, "showCoverageOnHover": False},
+            name="Bäume",
         ).add_to(m)
 
     LocateControl(auto_start=False).add_to(m)
