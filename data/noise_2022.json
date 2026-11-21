@@ -1,0 +1,85 @@
+{
+  "metrics": {
+    "n_points": 41101,
+    "median_den": 48.8,
+    "median_n": 41.3,
+    "trigger_den_pct": 11.7,
+    "trigger_n_pct": 15.2,
+    "health_den_pct": 4.3,
+    "health_n_pct": 7.6
+  },
+  "dist": {
+    "den": {
+      "< 45": 5383,
+      "45–49": 17528,
+      "50–54": 6823,
+      "55–59": 3593,
+      "60–64": 2948,
+      "65–69": 3062,
+      "70–74": 1307,
+      "≥ 75": 457
+    },
+    "n": {
+      "< 45": 26834,
+      "45–49": 4896,
+      "50–54": 3137,
+      "55–59": 3119,
+      "60–64": 2319,
+      "65–69": 440,
+      "70–74": 240,
+      "≥ 75": 116
+    }
+  },
+  "top": [
+    {
+      "street": "Wiebestraße",
+      "den": 73.8,
+      "points": 22
+    },
+    {
+      "street": "Heidestraße",
+      "den": 71.1,
+      "points": 141
+    },
+    {
+      "street": "Invalidenstraße",
+      "den": 70.3,
+      "points": 35
+    },
+    {
+      "street": "Alt-Moabit",
+      "den": 69.6,
+      "points": 356
+    },
+    {
+      "street": "Beusselstraße",
+      "den": 68.5,
+      "points": 309
+    },
+    {
+      "street": "Turmstraße",
+      "den": 68.3,
+      "points": 299
+    },
+    {
+      "street": "Stromstraße",
+      "den": 68.3,
+      "points": 225
+    },
+    {
+      "street": "Friedrich-Krause-Ufer",
+      "den": 68.2,
+      "points": 21
+    },
+    {
+      "street": "Perleberger Straße",
+      "den": 68.1,
+      "points": 287
+    },
+    {
+      "street": "Sickingenstraße",
+      "den": 67.5,
+      "points": 126
+    }
+  ]
+}

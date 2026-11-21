@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import re
+from urllib.parse import quote
 import pandas as pd
 import requests
 import streamlit as st
@@ -21,7 +22,11 @@ from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, ROUTE_STYLE, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
-from layers.noise import fetch_noise_data, THRESHOLDS, DB_BANDS
+from layers.noise import (
+    fetch_noise_data, THRESHOLDS, DB_BANDS,
+    WMS_URL as NOISE_WMS_URL, WMS_LAYERS as NOISE_WMS_LAYERS, LEGEND as NOISE_LEGEND,
+    sld_body as noise_sld_body,
+)
 from layers.crime import fetch_crime_data, fetch_crime_data_by_area, fetch_bezirk_comparison, fetch_mitte_lor_data, CATEGORIES, DEFAULT_CATEGORIES
 from layers.airquality import (
     fetch_current, fetch_history,
@@ -339,21 +344,21 @@ if show_greenspaces:
     )
     st.sidebar.markdown(f"<small>{legend_html}</small>", unsafe_allow_html=True)
 show_airquality = st.sidebar.checkbox("Luftqualität", value=False)
-show_noise = st.sidebar.checkbox("Lärmkarte (2004)", value=False)
-noise_layer = "a_strlaerm_tag"
+show_noise = st.sidebar.checkbox("Lärmkarte (2022)", value=False)
+noise_layer = NOISE_WMS_LAYERS[("Gesamt", "24 h")]
 if show_noise:
-    noise_source = st.sidebar.radio("Quelle", ["Straße", "Schiene"], horizontal=True, key="noise_source")
-    noise_time   = st.sidebar.radio("Zeit",   ["Tag",    "Nacht"],   horizontal=True, key="noise_time")
-    noise_layer  = {
-        ("Straße",  "Tag"):   "a_strlaerm_tag",
-        ("Straße",  "Nacht"): "b_strlaerm_nacht",
-        ("Schiene", "Tag"):   "ca_laerm_schiene_tag_links,cb_laerm_schiene_tag_rechts",
-        ("Schiene", "Nacht"): "da_schienlaerm_nachts_links,db_schienlaerm_nachts_rechts",
-    }[(noise_source, noise_time)]
-    _theme = st.get_option("theme.base") or "light"
-    _legend_file = "images/noise_legend_dark.png" if _theme == "dark" else "images/noise_legend_light.png"
-    st.sidebar.image(_legend_file, use_container_width=False)
-    st.sidebar.markdown("<small>Quelle: Umweltatlas Berlin 2004</small>", unsafe_allow_html=True)
+    noise_source = st.sidebar.radio("Quelle", ["Gesamt", "Straße", "Tram & U-Bahn"], key="noise_source")
+    noise_time   = st.sidebar.radio("Zeit", ["24 h", "Nacht"], horizontal=True, key="noise_time")
+    noise_layer  = NOISE_WMS_LAYERS[(noise_source, noise_time)]
+    _metric = "L<sub>DEN</sub>" if noise_time == "24 h" else "L<sub>N</sub> (22–6 Uhr)"
+    legend_html = "".join(
+        f'<span style="color:{colour}">&#9632;</span> {band} dB(A)<br>'
+        for band, colour in NOISE_LEGEND[noise_time]
+    )
+    st.sidebar.markdown(
+        f"<small>{_metric}<br>{legend_html}Quelle: Strategische Lärmkarten Berlin 2022</small>",
+        unsafe_allow_html=True,
+    )
 
 # --- Tabs ---
 tab_map, tab_departures, tab_arrivals, tab_demographics, tab_umwelt, tab_crime, tab_about = st.tabs(["Karte", "Abfahrten Berlin Hbf", "Ankünfte Berlin Hbf", "Bevölkerung", "Umwelt", "Kriminalität", "Über Moabit"])
@@ -400,10 +405,29 @@ with tab_map:
         st.session_state.map_zoom = max(st.session_state.map_zoom - 1, 10)
     st.session_state._prev_airquality = show_airquality
 
+    # CARTO basemap tiles need an API key (free for non-commercial use up to
+    # 5M requests/month, see carto.com/basemaps/apikey). The key lives in
+    # Streamlit secrets — .streamlit/secrets.toml locally (gitignored), App
+    # settings → Secrets on Streamlit Cloud — never in the repo. Without a key
+    # CARTO serves an "API KEY REQUIRED" watermark, so fall back to keyless
+    # OpenStreetMap tiles instead: light rather than dark, but a working map.
+    try:
+        _carto_key = st.secrets.get("CARTO_API_KEY", "")
+    except Exception:  # no secrets file at all
+        _carto_key = ""
+    if _carto_key:
+        _basemap = dict(
+            tiles=f"https://basemaps.cartocdn.com/rastertiles/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png?key={_carto_key}",
+            attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors '
+                 '&copy; <a href="https://carto.com/attribution/">CARTO</a>',
+        )
+    else:
+        _basemap = dict(tiles="OpenStreetMap")
+
     m = folium.Map(
         location=st.session_state.map_center,
         zoom_start=st.session_state.map_zoom,
-        tiles="CartoDB dark_matter",
+        **_basemap,
     )
 
     folium.GeoJson(
@@ -569,12 +593,14 @@ with tab_map:
 
     if show_noise:
         folium.WmsTileLayer(
-            url="https://gdi.berlin.de/services/wms/ua_laerm_2004",
+            # sld_body goes in the base URL: folium camelCases keyword options
+            # (sld_body -> sldBody), which the server silently ignores.
+            url=f"{NOISE_WMS_URL}?sld_body={quote(noise_sld_body(noise_layer))}",
             layers=noise_layer,
             fmt="image/png",
             transparent=True,
             version="1.3.0",
-            attr="Umweltatlas Berlin 2004",
+            attr="Strategische Lärmkarten Berlin 2022",
             opacity=0.7,
         ).add_to(m)
 
@@ -1147,10 +1173,13 @@ with tab_umwelt:
 
     # --- Noise section ---
     st.divider()
-    st.subheader("Straßenverkehrslärm (Umweltatlas Berlin 2004)")
+    st.subheader("Umgebungslärm (Strategische Lärmkarten 2022)")
     st.caption(
-        "Beurteilungspegel entlang der Straßenabschnitte im Moabiter Gebiet (ca. Begrenzungsrechteck). "
-        "Quelle: Senatsverwaltung für Stadtentwicklung, Umweltatlas 2004."
+        "Berechnete Pegel an allen Gebäudefassaden in Moabit (alle Quellen). "
+        "LDEN = gewichteter 24-Stunden-Mittelwert, LN = Nacht (22–6 Uhr). "
+        "Schwellen nach Lärmaktionsplan Berlin 2024–2029: Auslösewerte 65 / 55 dB(A), "
+        "Gesundheitsgefährdung ab 70 / 60 dB(A). "
+        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Umweltatlas."
     )
 
     with st.spinner("Lade Lärmdaten..."):
@@ -1162,25 +1191,26 @@ with tab_umwelt:
 
     if noise:
         m_data = noise["metrics"]
+        _t, _h = THRESHOLDS["trigger"], THRESHOLDS["health"]
 
         # Headline metrics
+        _noise_items = [
+            ("Fassadenpunkte", _fmt_int(m_data["n_points"])),
+            ("Median LDEN",    f"{_fmt_float(m_data['median_den'])} dB(A)"),
+            ("Median LN",      f"{_fmt_float(m_data['median_n'])} dB(A)"),
+            (f"LDEN ≥ {_t['den']} dB(A)", _fmt_pct(m_data["trigger_den_pct"])),
+        ]
         if _is_mobile:
-            _metrics_2col([
-                {"label": "Straßenabschnitte",  "value": m_data["n_segments"]},
-                {"label": "Median Tag",          "value": f"{_fmt_float(m_data['median_day'])} dB"},
-                {"label": "Median Nacht",        "value": f"{_fmt_float(m_data['median_night'])} dB"},
-                {"label": "Tag-Nacht-Differenz", "value": f"{_fmt_float(m_data['median_day'] - m_data['median_night'])} dB"},
-            ])
+            _metrics_2col([{"label": l, "value": v} for l, v in _noise_items])
         else:
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Straßenabschnitte",    m_data["n_segments"])
-            col2.metric("Median Tag",           f"{_fmt_float(m_data['median_day'])} dB")
-            col3.metric("Median Nacht",         f"{_fmt_float(m_data['median_night'])} dB")
-            col4.metric("Tag-Nacht-Differenz",  f"{_fmt_float(m_data['median_day'] - m_data['median_night'])} dB")
+            for col, (label, value) in zip(st.columns(4), _noise_items):
+                col.metric(label, value)
 
         st.markdown(
-            f"**{_fmt_float(m_data['above_day_pct'])} %** der Abschnitte überschreiten den EU-Richtwert tagsüber ({THRESHOLDS['Tag']} dB) · "
-            f"**{_fmt_float(m_data['above_night_pct'])} %** nachts ({THRESHOLDS['Nacht']} dB)"
+            f"**{_fmt_pct(m_data['trigger_den_pct'])}** der Fassaden liegen über dem Auslösewert "
+            f"(LDEN ≥ {_t['den']} dB(A)), **{_fmt_pct(m_data['trigger_n_pct'])}** nachts "
+            f"(LN ≥ {_t['n']} dB(A)). Im gesundheitsgefährdenden Bereich: "
+            f"**{_fmt_pct(m_data['health_den_pct'])}** ganztags, **{_fmt_pct(m_data['health_n_pct'])}** nachts."
         )
 
         st.divider()
@@ -1191,27 +1221,21 @@ with tab_umwelt:
 
         # Distribution chart
         with col_dist:
-            st.subheader("Pegelverteilung: Tag vs. Nacht")
-            colours = {"Tag": "#C0504D", "Nacht": "#1E88E5"}
+            st.subheader("Pegelverteilung: 24 h vs. Nacht")
             fig_dist = go.Figure()
-            for col_name in ["Nacht", "Tag"]:
+            for key, label, colour in [("n", "Nacht (LN)", "#1E88E5"), ("den", "24 h (LDEN)", "#C0504D")]:
                 fig_dist.add_trace(go.Bar(
-                    name=col_name,
+                    name=label,
                     x=DB_BANDS,
-                    y=noise["dist"][col_name],
-                    marker_color=colours[col_name],
+                    y=[noise["dist"][key][b] for b in DB_BANDS],
+                    marker_color=colour,
                 ))
-            fig_dist.add_vline(
-                x=1.5, line_dash="dot", line_color="white", opacity=0.4,
-                annotation_text=f"EU-Richtwert Tag ({THRESHOLDS['Tag']} dB)",
-                annotation_font_size=10, annotation_position="top right",
-            )
             fig_dist.update_layout(
                 barmode="group",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Anzahl Abschnitte"),
-                xaxis_title="Pegelklasse (dB)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Anzahl Fassadenpunkte"),
+                xaxis_title="Pegelklasse (dB(A))",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
                 margin=dict(t=40, b=20),
                 height=380,
@@ -1220,33 +1244,37 @@ with tab_umwelt:
 
         # Top streets chart
         with col_top:
-            st.subheader("Lauteste Straßen (Tagesmittel)")
-            top_df = noise["top"].sort_values("dB (Tag)")
+            st.subheader("Lauteste Straßen (Straßenlärm, LDEN)")
+            top = sorted(noise["top"], key=lambda r: r["den"])
             fig_top = go.Figure(go.Bar(
-                x=top_df["dB (Tag)"],
-                y=top_df["Straße"],
+                x=[r["den"] for r in top],
+                y=[r["street"] for r in top],
                 orientation="h",
                 marker_color=[
-                    "#C0504D" if v >= 70 else "#FB8C00" if v >= 65 else "#FFB300"
-                    for v in top_df["dB (Tag)"]
+                    "#C0504D" if r["den"] >= _h["den"] else "#FB8C00" if r["den"] >= _t["den"] else "#FFB300"
+                    for r in top
                 ],
-                text=[_fmt_float(v) for v in top_df["dB (Tag)"]],
+                text=[_fmt_float(r["den"]) for r in top],
                 textposition="outside",
             ))
             fig_top.add_vline(
-                x=THRESHOLDS["Tag"], line_dash="dot", line_color="white", opacity=0.4,
-                annotation_text=f"EU-Richtwert ({THRESHOLDS['Tag']} dB)",
-                annotation_font_size=10, annotation_position="top right",
+                x=_t["den"], line_dash="dot", line_color="white", opacity=0.4,
+                annotation_text=f"Auslösewert ({_t['den']} dB(A))",
+                annotation_font_size=10, annotation_position="bottom right",
             )
             fig_top.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="dB"),
-                xaxis_range=[50, 78],
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="dB(A)"),
+                xaxis_range=[55, 78],
                 margin=dict(t=40, b=20, r=60),
                 height=380,
             )
             st.plotly_chart(fig_top, use_container_width=True, config=_plot_config)
+            st.caption(
+                "Median des Straßenlärms an straßenseitigen Fassaden (≤ 20 m von der Straße, "
+                "mind. 15 Messpunkte). Rot: über der Gesundheitsschwelle, orange: über dem Auslösewert."
+            )
 
 # --- Kriminalität tab ---
 with tab_crime:
