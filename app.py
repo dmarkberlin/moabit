@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import re
+from datetime import date
 from urllib.parse import quote
 import pandas as pd
 import requests
@@ -19,7 +20,7 @@ from layers.cycling import fetch_cycle_lanes, lane_style, LEGEND as CYCLE_LEGEND
 from layers.wohnlagen import fetch_wohnlagen, WOL_STYLE
 from layers.rent import YEARS as IBB_YEARS, ASKING_RENTS, BERLIN_MEDIAN_KEY
 from layers.greenspace import fetch_greenspaces, FEATURE_STYLE, LEGEND as GREEN_LEGEND
-from layers.trees import fetch_trees, TREE_TYPES
+from layers.trees import fetch_trees, TREE_TYPES, FIELDS as TREE_FIELDS
 from layers.amenities import fetch_amenities, AMENITY_STYLE, LEGEND as AMENITY_LEGEND
 from layers.routes import fetch_routes, fetch_routes_full, ROUTE_STYLE, LEGEND as ROUTE_LEGEND
 from layers.bikeshare import fetch_bikeshare_stations
@@ -1317,7 +1318,7 @@ with tab_umwelt:
             top = sorted(noise["top"], key=lambda r: r["den"])
             fig_top = go.Figure(go.Bar(
                 x=[r["den"] for r in top],
-                y=[r["street"] for r in top],
+                y=[f"{r['street']} ({r['points']})" for r in top],
                 orientation="h",
                 marker_color=[
                     "#C0504D" if r["den"] >= _h["den"] else "#FB8C00" if r["den"] >= _t["den"] else "#FFB300"
@@ -1342,8 +1343,172 @@ with tab_umwelt:
             st.plotly_chart(fig_top, use_container_width=True, config=_plot_config)
             st.caption(
                 "Median des Straßenlärms an straßenseitigen Fassaden (≤ 20 m von der Straße, "
-                "mind. 15 Messpunkte). Rot: über der Gesundheitsschwelle, orange: über dem Auslösewert."
+                "mind. 50 Fassadenpunkte; Anzahl in Klammern). Rot: über der Gesundheitsschwelle, "
+                "orange: über dem Auslösewert."
             )
+
+        # --- Noise at sensitive buildings ---
+        _fac = noise.get("facilities") or []
+        if _fac:
+            st.subheader("Lärm an Kitas, Schulen und Krankenhäusern")
+            _fac_series = [
+                ("trigger_den_pct", f"24 h: LDEN ≥ {_t['den']} dB(A)", "#C0504D"),
+                ("trigger_n_pct",   f"Nacht: LN ≥ {_t['n']} dB(A)",    "#1E88E5"),
+            ]
+            fig_fac = go.Figure()
+            for key, label, colour in _fac_series:
+                fig_fac.add_trace(go.Bar(
+                    name=label,
+                    x=[f["label"] for f in _fac],
+                    y=[f[key] for f in _fac],
+                    marker_color=colour,
+                    text=[
+                        f"{_fmt_pct(f[key])}<br>({round(f[key] / 100 * f['buildings'])} von {f['buildings']})"
+                        for f in _fac
+                    ],
+                    textposition="outside",
+                ))
+            _fac_max = max(f[k] for f in _fac for k, _, _ in _fac_series)
+            fig_fac.update_layout(
+                barmode="group",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", ticksuffix=" %",
+                           range=[0, _fac_max * 1.35], title="Anteil der Gebäude"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=20),
+                height=400,
+            )
+            st.plotly_chart(fig_fac, use_container_width=True, config=_plot_config)
+            _fac_health = "; ".join(
+                f"{f['label']} {_fmt_pct(f['health_den_pct'])} / {_fmt_pct(f['health_n_pct'])}" for f in _fac
+            )
+            st.caption(
+                "Anteil der Gebäude, deren am stärksten belastete Fassade über dem Auslösewert des "
+                "Lärmaktionsplans liegt (alle Lärmquellen). Im gesundheitsgefährdenden Bereich "
+                f"(≥ {_h['den']} / {_h['n']} dB(A), 24 h / Nacht): {_fac_health}. "
+                "Gebäude laut Lärmkartierung 2022, ohne Namen; ein Standort kann mehrere Gebäude umfassen."
+            )
+
+    # --- Trees section ---
+    st.divider()
+    st.subheader("Stadtbäume (Baumbestand Berlin)")
+    st.caption(
+        "Straßen- und Anlagenbäume in Moabit laut Baumkataster des Grünflächeninformationssystems (GRIS). "
+        "Anlagenbäume sind nur teilweise erfasst. "
+        "Quelle: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt, Baumbestand Berlin."
+    )
+    try:
+        _tdf = pd.DataFrame(get_trees(), columns=TREE_FIELDS)
+    except Exception as e:
+        st.error(f"Baumdaten konnten nicht geladen werden: {e}")
+        _tdf = pd.DataFrame()
+
+    if not _tdf.empty:
+        _tdf["year"] = pd.to_numeric(_tdf["year"], errors="coerce")
+        _tdf["age"] = date.today().year - _tdf["year"]
+        _tlabels = {k: v["label"] for k, v in TREE_TYPES.items()}
+        _tcolours = {k: v["colour"] for k, v in TREE_TYPES.items()}
+        _n_street = int((_tdf["type"] == "strasse").sum())
+        _n_park = int((_tdf["type"] == "anlage").sum())
+
+        _tree_items = [
+            ("Bäume gesamt",    _fmt_int(len(_tdf))),
+            ("Straßenbäume",    _fmt_int(_n_street)),
+            ("Anlagenbäume",    _fmt_int(_n_park)),
+            ("Medianes Alter",  f"{_fmt_int(_tdf['age'].median())} Jahre"),
+        ]
+        if _is_mobile:
+            _metrics_2col([{"label": l, "value": v} for l, v in _tree_items])
+        else:
+            for col, (label, value) in zip(st.columns(4), _tree_items):
+                col.metric(label, value)
+
+        if _is_mobile:
+            col_species, col_decade = st.container(), st.container()
+        else:
+            col_species, col_decade = st.columns(2)
+
+        # Most common species, stacked by street/park
+        with col_species:
+            st.subheader("Häufigste Baumarten")
+            _top_species = _tdf["species"].value_counts().head(10).index.tolist()
+            _sp = (_tdf[_tdf["species"].isin(_top_species)]
+                   .groupby(["species", "type"]).size().unstack(fill_value=0))
+            # Desktop: horizontal bars, largest at the top. Mobile: vertical bars
+            # (portrait), largest first, per the dashboard's mobile chart rule.
+            _order = _sp.sum(axis=1).sort_values(ascending=not _is_mobile).index.tolist()
+            fig_sp = go.Figure()
+            for t in TREE_TYPES:
+                vals = [int(_sp.loc[sp, t]) if t in _sp.columns else 0 for sp in _order]
+                if _is_mobile:
+                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=_order, y=vals, marker_color=_tcolours[t]))
+                else:
+                    fig_sp.add_trace(go.Bar(name=_tlabels[t], x=vals, y=_order, orientation="h",
+                                            marker_color=_tcolours[t]))
+            fig_sp.update_layout(
+                barmode="stack",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=100 if _is_mobile else 20),
+                height=460 if _is_mobile else 420,
+            )
+            if _is_mobile:
+                fig_sp.update_layout(xaxis=dict(tickangle=-40),
+                                     yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"))
+            else:
+                fig_sp.update_layout(xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"))
+            st.plotly_chart(fig_sp, use_container_width=True, config=_plot_config)
+
+        # Planting by decade, stacked by street/park
+        with col_decade:
+            st.subheader("Pflanzjahre nach Jahrzehnt")
+            _dated = _tdf.dropna(subset=["year"]).copy()
+            _dated["decade"] = (_dated["year"] // 10 * 10).astype(int)
+            _dated["decade_label"] = _dated["decade"].map(lambda d: "vor 1900" if d < 1900 else f"{d}er")
+            _dec = _dated.groupby(["decade_label", "type"]).size().unstack(fill_value=0)
+            _dec_order = sorted(_dec.index, key=lambda lbl: 0 if lbl == "vor 1900" else int(lbl[:4]))
+            fig_dec = go.Figure()
+            for t in TREE_TYPES:
+                fig_dec.add_trace(go.Bar(
+                    name=_tlabels[t], x=_dec_order,
+                    y=[int(_dec.loc[d, t]) if t in _dec.columns else 0 for d in _dec_order],
+                    marker_color=_tcolours[t],
+                ))
+            fig_dec.update_layout(
+                barmode="stack",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)", title="Bäume"),
+                xaxis=dict(tickangle=-40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                margin=dict(t=40, b=20),
+                height=460 if _is_mobile else 420,
+            )
+            st.plotly_chart(fig_dec, use_container_width=True, config=_plot_config)
+            _undated = len(_tdf) - len(_dated)
+            st.caption(f"Ohne Pflanzjahr: {_fmt_int(_undated)} Bäume (überwiegend Anlagenbäume). "
+                       "Viele Pflanzjahre sind geschätzt – sie häufen sich auf runden Jahren wie 1950 oder 1975.")
+
+        # Oldest recorded trees
+        st.markdown("**Älteste erfasste Bäume**")
+        _oldest = _tdf.dropna(subset=["year"]).sort_values(["year", "height"], ascending=[True, False]).head(5)
+        _oldest_rows = [
+            {
+                "Baumart":   r.species,
+                "Gepflanzt": str(int(r.year)),
+                "Alter":     f"{int(r.age)} Jahre",
+                "Höhe":      f"{int(r.height)} m" if pd.notna(r.height) else "–",
+                "Standort":  (f"{r.street} {r.number}".strip() if r.street else "Grünanlage"),
+            }
+            for r in _oldest.itertuples()
+        ]
+        if _is_mobile:
+            st.table(pd.DataFrame(_oldest_rows))
+        else:
+            st.dataframe(pd.DataFrame(_oldest_rows), use_container_width=True, hide_index=True, height="content")
+        st.caption("Pflanzjahre laut Baumkataster, teils geschätzt.")
 
 # --- Kriminalität tab ---
 with tab_crime:

@@ -32,19 +32,9 @@
   },
   "top": [
     {
-      "street": "Wiebestraße",
-      "den": 73.8,
-      "points": 22
-    },
-    {
       "street": "Heidestraße",
       "den": 71.1,
       "points": 141
-    },
-    {
-      "street": "Invalidenstraße",
-      "den": 70.3,
-      "points": 35
     },
     {
       "street": "Alt-Moabit",
@@ -67,11 +57,6 @@
       "points": 225
     },
     {
-      "street": "Friedrich-Krause-Ufer",
-      "den": 68.2,
-      "points": 21
-    },
-    {
       "street": "Perleberger Straße",
       "den": 68.1,
       "points": 287
@@ -80,6 +65,56 @@
       "street": "Sickingenstraße",
       "den": 67.5,
       "points": 126
+    },
+    {
+      "street": "Paulstraße",
+      "den": 67.1,
+      "points": 180
+    },
+    {
+      "street": "Kaiserin-Augusta-Allee",
+      "den": 66.3,
+      "points": 70
+    },
+    {
+      "street": "Gotzkowskystraße",
+      "den": 65.6,
+      "points": 137
+    }
+  ],
+  "facilities": [
+    {
+      "key": "kita",
+      "label": "Kitas",
+      "buildings": 18,
+      "without_points": 0,
+      "median_max_den": 52.5,
+      "trigger_den_pct": 22.2,
+      "health_den_pct": 11.1,
+      "trigger_n_pct": 22.2,
+      "health_n_pct": 16.7
+    },
+    {
+      "key": "schule",
+      "label": "Schulen & Bildung",
+      "buildings": 53,
+      "without_points": 0,
+      "median_max_den": 58.9,
+      "trigger_den_pct": 24.5,
+      "health_den_pct": 13.2,
+      "trigger_n_pct": 41.5,
+      "health_n_pct": 17.0
+    },
+    {
+      "key": "krankenhaus",
+      "label": "Krankenhäuser",
+      "buildings": 11,
+      "without_points": 0,
+      "median_max_den": 52.1,
+      "trigger_den_pct": 18.2,
+      "health_den_pct": 9.1,
+      "trigger_n_pct": 27.3,
+      "health_n_pct": 9.1
     }
   ]
 }

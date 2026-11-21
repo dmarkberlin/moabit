@@ -17,7 +17,8 @@ import statistics
 from collections import defaultdict
 
 import requests
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, shape
+from shapely.ops import transform
 from shapely.strtree import STRtree
 
 from layers.utils import load_boundary
@@ -99,8 +100,18 @@ DB_BANDS = ["< 45", "45–49", "50–54", "55–59", "60–64", "65–69", "70�
 # A façade point is attributed to a street only if it lies this close to it;
 # beyond that it is most likely a rear or courtyard façade.
 _STREET_MAX_DIST_M = 20
-_STREET_MIN_POINTS = 15
+_STREET_MIN_POINTS = 50
 _TOP_N = 10
+
+# Sensitive buildings published with the 2022 maps (building outlines only, no
+# names). Each is rated by its loudest façade point — the usual measure in noise
+# action planning — using façade points within this distance of its outline.
+FACILITY_LAYERS = [
+    ("kita",        "Kitas",                     "ae_kita2022"),
+    ("schule",      "Schulen & Bildung",         "ad_bildungseinrichtung2022"),
+    ("krankenhaus", "Krankenhäuser",             "ac_krankenhaeuser2022"),
+]
+_FACILITY_MAX_DIST_M = 3
 
 
 def _band(db):
@@ -206,10 +217,42 @@ def _compute():
         key=lambda r: r[1], reverse=True,
     )[:_TOP_N]
 
+    # Noise at sensitive buildings: loudest façade point per building.
+    pt_geoms = [Point(_to_metres(lon, lat)) for lon, lat, _ in points]
+    pt_tree = STRtree(pt_geoms)
+    facilities = []
+    for key, label, layer in FACILITY_LAYERS:
+        max_den, max_n, without_points = [], [], 0
+        for f in _wfs_all(_WFS_NOISE, f"ua_stratlaerm_2022:{layer}"):
+            geom = shape(f["geometry"])
+            if not boundary.contains(geom.representative_point()):
+                continue
+            outline = transform(_to_metres, geom)
+            idx = pt_tree.query(outline.buffer(_FACILITY_MAX_DIST_M), predicate="intersects")
+            if len(idx) == 0:
+                without_points += 1
+                continue
+            max_den.append(max(points[i][2]["ges_den"] for i in idx))
+            max_n.append(max(points[i][2]["ges_n"] for i in idx))
+        if not max_den:
+            continue
+        facilities.append({
+            "key": key,
+            "label": label,
+            "buildings": len(max_den),
+            "without_points": without_points,
+            "median_max_den": round(statistics.median(max_den), 1),
+            "trigger_den_pct": pct(max_den, t["den"]),
+            "health_den_pct":  pct(max_den, h["den"]),
+            "trigger_n_pct":   pct(max_n, t["n"]),
+            "health_n_pct":    pct(max_n, h["n"]),
+        })
+
     return {
         "metrics": metrics,
         "dist": dist,
         "top": [{"street": s, "den": d, "points": c} for s, d, c in top],
+        "facilities": facilities,
     }
 
 
