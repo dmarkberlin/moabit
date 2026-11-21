@@ -402,8 +402,21 @@ _HAFAS_BODY = {
     "lang": "de",
 }
 
-def _hhmm_to_minutes(s):
-    return int(s[:2]) * 60 + int(s[2:4])
+def _hafas_minutes(s):
+    """Minutes since the start of the board's service day.
+
+    HAFAS writes times as HHMMSS, or DDHHMMSS once they pass midnight (day
+    offset, e.g. "01001900" = 00:19 the next day). Reading only the first six
+    characters showed such trains as "01:00" with nonsense delays.
+    """
+    s = s.zfill(8)
+    return int(s[:2]) * 1440 + int(s[2:4]) * 60 + int(s[4:6])
+
+
+def _hafas_clock(s):
+    """"HH:MM" from HHMMSS or DDHHMMSS."""
+    s = s[-6:]
+    return f"{s[:2]}:{s[2:4]}"
 
 def _station_board(stop_id, results, mode, dir_label, time_label):
     """Fetch a HAFAS station board.
@@ -437,11 +450,10 @@ def _station_board(stop_id, results, mode, dir_label, time_label):
         t_plan   = stop.get(f"{p}TimeS", "")
         t_real   = stop.get(f"{p}TimeR", t_plan)
         platform = stop.get(f"{p}PltfR", stop.get(f"{p}PltfS", {})).get("txt", "—")
-        time_str = f"{t_plan[:2]}:{t_plan[2:4]}" if len(t_plan) >= 4 else "—"
-        if t_plan and t_real and t_real != t_plan and len(t_real) >= 4:
-            diff = _hhmm_to_minutes(t_real) - _hhmm_to_minutes(t_plan)
-            if diff < -720:
-                diff += 1440  # midnight rollover
+        time_str = _hafas_clock(t_plan) if len(t_plan) >= 6 else "—"
+        if len(t_plan) >= 6 and len(t_real) >= 6 and t_real != t_plan:
+            # Both times carry the day offset, so the difference is correct across midnight.
+            diff = _hafas_minutes(t_real) - _hafas_minutes(t_plan)
             delay_str = f"+{diff} min" if diff > 0 else ("pünktlich" if diff == 0 else f"{diff} min")
         else:
             delay_str = "pünktlich"
@@ -597,9 +609,16 @@ with tab_map:
         with st.spinner(tr("Lade Radwege...", "Loading cycle lanes…")):
             lanes = get_lanes()
 
+    # Bike share and air quality are fetched live. Streamlit renders every tab in
+    # one script run, so an unhandled outage here would break the whole page;
+    # instead the layer is skipped with a warning.
     if show_bikeshare:
         with st.spinner(tr("Lade Leihrad-Daten...", "Loading bike share data…")):
-            bikeshare_stations = get_bikeshare_stations()
+            try:
+                bikeshare_stations = get_bikeshare_stations()
+            except Exception as e:
+                bikeshare_stations = []
+                st.warning(tr("Leihrad-Daten derzeit nicht verfügbar", "Bike share data currently unavailable") + f": {e}")
 
     if show_wohnlagen:
         with st.spinner(tr("Lade Wohnlagenkarte...", "Loading residential area ratings…")):
@@ -832,11 +851,15 @@ with tab_map:
     if show_airquality:
         _g = _fg("Luftqualität")
         with st.spinner(tr("Lade Luftqualitätsdaten...", "Loading air quality data…")):
-            aq_current = get_airquality_current()
+            try:
+                aq_current = get_airquality_current()
+            except Exception as e:
+                aq_current = {}
+                st.warning(tr("Luftqualitätsdaten derzeit nicht verfügbar", "Air quality data currently unavailable") + f": {e}")
         readings = "<br>".join(
-            f"{label}: {_fmt_float(v['value']) if isinstance(v['value'], float) else v['value']} {v['unit']}"
+            f"{trl(label)}: {_fmt_float(v['value']) if isinstance(v['value'], float) else v['value']} {v['unit']}"
             for label, v in aq_current.items()
-        )
+        ) or tr("Keine aktuellen Messwerte", "No current readings")
         folium.Marker(
             location=[STATION_LAT, STATION_LON],
             icon=folium.Icon(color="lightgray", icon="cloud", prefix="fa"),
@@ -951,14 +974,14 @@ with tab_map:
         m,
         use_container_width=True,
         height=350 if _is_mobile else 500,
-        # Deliberately NOT requesting "center"/"zoom". st_folium reruns the script
-        # whenever a requested value changes, so asking for the viewport means a
-        # rerun on every map movement — and because Leaflet re-reports a slightly
-        # different centre after the map is rebuilt at a rounded one, that feeds
-        # back on itself and the map refreshes continuously. Persisting the
-        # viewport and not rerunning are mutually exclusive with this component,
-        # so the map resets to the default view when the script reruns.
-        returned_objects=["last_object_clicked"],
+        # Deliberately NOT requesting "center"/"zoom": st_folium reruns the script
+        # whenever a requested value changes, so that would rerun on every map
+        # movement and, because Leaflet re-reports a slightly different centre,
+        # feed back into a continuous refresh. The view survives reruns anyway,
+        # because only the feature groups change (see _fg above). The clicked
+        # object's tooltip is requested so a stop click can be told apart from a
+        # click on any other marker.
+        returned_objects=["last_object_clicked", "last_object_clicked_tooltip"],
         feature_group_to_add=_layers or None,
         zoom=_map_zoom,
         key="moabit_map",
@@ -967,8 +990,13 @@ with tab_map:
     if show_transport and map_data.get("last_object_clicked"):
         click = map_data["last_object_clicked"]
         clat, clng = click.get("lat"), click.get("lng")
-        if clat and clng:
-            matched = min(stops, key=lambda s: (s["lat"] - clat) ** 2 + (s["lon"] - clng) ** 2)
+        # Only a click on a stop marker selects a stop: its tooltip is the stop
+        # name. Matching by position alone (within ~200 m) also fired on clicks
+        # on trees, amenities or bike stations near a stop.
+        clicked_name = (map_data.get("last_object_clicked_tooltip") or "").strip()
+        candidates = [s for s in stops if s["name"] == clicked_name]
+        if clat and clng and candidates:
+            matched = min(candidates, key=lambda s: (s["lat"] - clat) ** 2 + (s["lon"] - clng) ** 2)
             dist = ((matched["lat"] - clat) ** 2 + (matched["lon"] - clng) ** 2) ** 0.5
             if dist < 0.002:
                 st.session_state.selected_stop = matched
@@ -2236,16 +2264,16 @@ Moabit's crime rate is higher than the Berlin average, but a closer look puts th
             key=f"crime_cats_{LANG}",
         )
         st.session_state.crime_cats_sel = selected
-        _swatch_html = '<div style="display:flex;flex-wrap:wrap;row-gap:4px;column-gap:12px;margin-top:4px;">'
+        _cat_swatches = '<div style="display:flex;flex-wrap:wrap;row-gap:4px;column-gap:12px;margin-top:4px;">'
         for _c in all_cats:
             _col = _CAT_COLOURS[_c]
-            _swatch_html += (
+            _cat_swatches += (
                 f'<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;">'
                 f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
                 f'background:{_col};flex-shrink:0;"></span>{trl(_c)}</span>'
             )
-        _swatch_html += '</div>'
-        st.markdown(_swatch_html, unsafe_allow_html=True)
+        _cat_swatches += '</div>'
+        st.markdown(_cat_swatches, unsafe_allow_html=True)
 
         if selected:
             fig_trend = go.Figure()

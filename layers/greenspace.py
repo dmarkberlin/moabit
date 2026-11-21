@@ -1,6 +1,6 @@
 import json
 import os
-from shapely.geometry import shape, Point
+from shapely.geometry import shape
 from layers.overpass import overpass_post
 from layers.utils import load_boundary
 
