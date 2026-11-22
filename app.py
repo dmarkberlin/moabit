@@ -1,4 +1,5 @@
 import base64
+import html
 import json
 import os
 import pathlib
@@ -220,6 +221,17 @@ class _MapLegend(MacroElement):
         self.html = html
 
 
+def _esc(value):
+    """Escape external text (OSM, nextbike, GTFS names) for map tooltips.
+
+    folium puts tooltip text unescaped into HTML, and plain Tooltips into a
+    JavaScript template literal, so a backtick or "${" would break the layer's
+    script. Entities are decoded again when the browser reads the tooltip text,
+    so the stop-click name match still sees the original name.
+    """
+    return html.escape(str(value), quote=True).replace("`", "&#96;").replace("$", "&#36;")
+
+
 def _tr_delay(text):
     """Station boards report punctuality in German; "+3 min" needs no translation."""
     return tr(text, "on time") if text == "pünktlich" else text
@@ -331,7 +343,11 @@ def _svg_uri(filename, scale=1.0, title=None):
     data = base64.b64encode(svg.encode()).decode()
     return f"data:image/svg+xml;base64,{data}"
 
-_TYPE_ICON = {
+@st.cache_data
+def _type_icons():
+    """Logo data URIs for the station boards. Reading and base64-encoding the
+    SVGs is cached: they never change, but this ran on every rerun before."""
+    return {
     "S":          _svg_uri("S-Bahn-Logo.svg",             title="S-Bahn"),
     "U":          _svg_uri("U-Bahn-Logo-BVG.svg",         title="U-Bahn"),
     "Tram":       _svg_uri("Tram-Logo-BVG.svg",           title="Tram"),
@@ -343,7 +359,10 @@ _TYPE_ICON = {
     "RE":         _svg_uri("VBB_Bahn-Regionalverkehr.svg", title="Regionalexpress"),
     "IC":         _svg_uri("IC-Logo.svg",  scale=0.90,    title="InterCity"),
     "ICE":        _svg_uri("ICE-Logo.svg", scale=0.90,    title="InterCityExpress"),
-}
+    }
+
+
+_TYPE_ICON = _type_icons()
 
 # German: 1.234 · 12,3 % · 4,5 — English: 1,234 · 12.3% · 4.5
 def _fmt_int(n) -> str:
@@ -710,6 +729,7 @@ with tab_map:
         # Tooltip shows a translated label rather than the raw OSM value in "type".
         _green_features = [
             {**f, "properties": {**f["properties"],
+                                 "name": _esc(f["properties"].get("name", "")),
                                  "type_label": trl(GREEN_TYPE_LABELS.get(f["properties"].get("type", ""),
                                                                          f["properties"].get("type", "")))}}
             for f in greenspaces
@@ -731,8 +751,8 @@ with tab_map:
         for feature in amenities:
             amenity = feature["amenity"]
             style = AMENITY_STYLE.get(amenity, {"colour": "#888888", "label": amenity})
-            name = feature["name"] or trl(style["label"])
-            tooltip = f"{name}<br>{feature['address']}" if feature["address"] else name
+            name = _esc(feature["name"] or trl(style["label"]))
+            tooltip = f"{name}<br>{_esc(feature['address'])}" if feature["address"] else name
             folium.CircleMarker(
                 location=[feature["lat"], feature["lon"]],
                 radius=6,
@@ -752,8 +772,14 @@ with tab_map:
         def _route_style(f):
             return ROUTE_STYLE.get(f["properties"].get("route", "bus"), ROUTE_STYLE["bus"])
 
+        _route_features = [
+            {**f, "properties": {**f["properties"],
+                                 "ref": _esc(f["properties"].get("ref", "")),
+                                 "name": _esc(f["properties"].get("name", ""))}}
+            for f in routes
+        ]
         folium.GeoJson(
-            {"type": "FeatureCollection", "features": routes},
+            {"type": "FeatureCollection", "features": _route_features},
             style_function=lambda f: {
                 "color":   _route_style(f)["colour"],
                 "weight":  _route_style(f)["weight"],
@@ -778,7 +804,7 @@ with tab_map:
                 "geometry": {"type": "LineString", "coordinates": coords},
                 "properties": {
                     "color": lane_style(tags),
-                    "name": tags.get("name") or tr("Radweg", "Cycle lane"),
+                    "name": _esc(tags.get("name") or tr("Radweg", "Cycle lane")),
                 }
             })
         folium.GeoJson(
@@ -799,7 +825,7 @@ with tab_map:
                 icon=folium.Icon(color=station["colour"], icon="bicycle", prefix="fa"),
                 tooltip=folium.Tooltip(
                     f"<span style='font-size:15px'>"
-                    f"<b>{station['name']}</b><br>"
+                    f"<b>{_esc(station['name'])}</b><br>"
                     f"{tr('Fahrräder verfügbar', 'Bikes available')}: {station['bikes']}<br>"
                     f"{tr('Stellplätze frei', 'Free docks')}: {station['docks']}<br>"
                     f"{tr('Kapazität', 'Capacity')}: {station['capacity']}"
@@ -813,6 +839,8 @@ with tab_map:
 
         _wol_features = [
             {**f, "properties": {**f["properties"],
+                                 "strasse": _esc(f["properties"].get("strasse", "")),
+                                 "hnr": _esc(f["properties"].get("hnr", "")),
                                  "wol_label": trl(WOL_STYLE.get(f["properties"].get("wol", ""), {}).get(
                                      "label", f["properties"].get("wol", "")))}}
             for f in wohnlagen
@@ -841,7 +869,7 @@ with tab_map:
             style  = stop_style(stop)
             folium.Marker(
                 location=[stop["lat"], stop["lon"]],
-                tooltip=name,
+                tooltip=_esc(name),
                 icon=folium.Icon(color=style["color"], icon=style["icon"], prefix="fa"),
             ).add_to(cluster)
 
