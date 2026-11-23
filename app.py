@@ -53,6 +53,18 @@ st.markdown("""
 .block-container { padding-top: 1rem !important; }
 h1 { font-weight: 400 !important; letter-spacing: 0.04em; }
 [role="tab"], [role="tab"] p, [role="tab"] div { font-size: 1.10rem !important; }
+/* Compact sidebar: slimmer collapse-button strip, smaller "Ebenen" heading and a
+   tighter gap between widgets (Streamlit's default 1rem spreads the layer list). */
+[data-testid="stSidebarHeader"] { height: 2.5rem; min-height: 0; padding-top: 0.25rem; padding-bottom: 0; }
+[data-testid="stSidebarUserContent"] { padding-top: 0; padding-bottom: 1.5rem; }
+[data-testid="stSidebar"] h1 { font-size: 1.35rem; padding: 0 0 0.25rem 0; }
+/* Streamlit pulls the next element up under headings (-1rem); in the compact
+   sidebar that made the first checkbox ride up against "Ebenen". */
+[data-testid="stSidebar"] [data-testid="stHeading"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+/* Language switch: nudge it below Streamlit's 60 px top bar, which cropped it. */
+.st-key-lang { margin-bottom: -0.8rem; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.3rem; }
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { margin-bottom: 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,7 +85,8 @@ if "lang" not in st.session_state:
     st.session_state.lang = "English" if st.query_params.get("lang", "").lower() == "en" else "Deutsch"
 
 _title_size = "1.3rem" if _is_mobile else "1.8rem"
-_hdr_title, _hdr_lang = st.columns([4, 1], vertical_alignment="center")
+# Bottom-aligned: centred, the switch rose into Streamlit's 60 px top bar and was cropped.
+_hdr_title, _hdr_lang = st.columns([4, 1], vertical_alignment="bottom")
 with _hdr_title:
     st.markdown(f"<h1 style='font-size:{_title_size}; margin-bottom:0.25rem'>Moabiter Dashboard</h1>", unsafe_allow_html=True)
 with _hdr_lang:
