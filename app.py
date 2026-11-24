@@ -182,19 +182,27 @@ def tr_species(name):
 # "none" = hollow square for the class the map leaves uncoloured, "line" = line
 # symbol (2004 draws coloured street/rail lines).
 
-def _swatch_html(kind, colour, size="0.75em"):
+# Map opacity of the noise layers. 2022 is a filled raster whose loudest classes
+# sit right on the streets, so it is kept at half opacity to let the street
+# network show through; 2004 only draws thin lines along the streets.
+NOISE_OPACITY = {"2022": 0.5, "2004": 0.8}
+
+
+def _swatch_html(kind, colour, size="0.75em", opacity=1.0):
+    # Swatches use the layer's own opacity, so on the dark background they look
+    # like the colours actually drawn on the (dark) map.
     if kind == "line":
         return (f'<span style="display:inline-block;width:1.4em;height:0.22em;background:{colour};'
-                f'vertical-align:0.2em;margin-right:0.35em"></span>')
+                f'opacity:{opacity};vertical-align:0.2em;margin-right:0.35em"></span>')
     if kind == "none":
         return (f'<span style="display:inline-block;width:{size};height:{size};box-sizing:border-box;'
                 f'border:1px solid rgba(250,250,250,0.6);vertical-align:-0.05em;margin-right:0.35em"></span>')
     return (f'<span style="display:inline-block;width:{size};height:{size};background:{colour};'
-            f'vertical-align:-0.05em;margin-right:0.35em"></span>')
+            f'opacity:{opacity};vertical-align:-0.05em;margin-right:0.35em"></span>')
 
 
-def _legend_rows_html(items):
-    return "".join(f"<div>{_swatch_html(k, c)}{label}</div>" for k, c, label in items)
+def _legend_rows_html(items, opacity=1.0):
+    return "".join(f"<div>{_swatch_html(k, c, opacity=opacity)}{label}</div>" for k, c, label in items)
 
 
 class _MapLegend(MacroElement):
@@ -609,7 +617,7 @@ if show_noise:
         ]
         _noise_source_line = tr("Quelle: Umweltatlas Berlin 2004", "Source: Berlin Environmental Atlas 2004")
     st.sidebar.markdown(
-        f"<small>{_metric}{_legend_rows_html(_noise_items)}{_noise_source_line}</small>",
+        f"<small>{_metric}{_legend_rows_html(_noise_items, NOISE_OPACITY[noise_year])}{_noise_source_line}</small>",
         unsafe_allow_html=True,
     )
     # Same legend on the map, next to the colours it explains.
@@ -617,7 +625,7 @@ if show_noise:
         '<div style="background:rgba(14,17,23,0.88);color:#fafafa;padding:6px 9px;border-radius:6px;'
         f'font:{11 if _is_mobile else 12}px/1.45 sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.5)">'
         f'<div style="font-weight:600;margin-bottom:2px">{tr("Lärm", "Noise")} {noise_year} · {_metric}</div>'
-        f"{_legend_rows_html(_noise_items)}</div>"
+        f"{_legend_rows_html(_noise_items, NOISE_OPACITY[noise_year])}</div>"
     )
 
 # --- Tabs ---
@@ -933,7 +941,7 @@ with tab_map:
             transparent=True,
             version="1.3.0",
             attr=tr("Strategische Lärmkarten Berlin 2022", "Berlin strategic noise maps 2022"),
-            opacity=0.7,
+            opacity=NOISE_OPACITY["2022"],
         ).add_to(_g)
         _MapLegend(_map_legend_html).add_to(_g)
     elif show_noise:
@@ -947,7 +955,7 @@ with tab_map:
             transparent=True,
             version="1.3.0",
             attr=tr("Umweltatlas Berlin 2004", "Berlin Environmental Atlas 2004"),
-            opacity=0.8,
+            opacity=NOISE_OPACITY["2004"],
         ).add_to(_g)
         _MapLegend(_map_legend_html).add_to(_g)
 
