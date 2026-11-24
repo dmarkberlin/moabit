@@ -47,7 +47,8 @@ from layers.demographics import (
     COUNTRY_COLOURS,
 )
 
-st.set_page_config(page_title="Moabiter Dashboard", page_icon="images/icon.png", layout="wide")
+st.set_page_config(page_title="Moabiter Dashboard", page_icon="images/icon.png", layout="wide",
+                   initial_sidebar_state="expanded")
 st.markdown("""
 <style>
 .block-container { padding-top: 1rem !important; }
@@ -63,8 +64,18 @@ h1 { font-weight: 400 !important; letter-spacing: 0.04em; }
 [data-testid="stSidebar"] [data-testid="stHeading"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 /* Language switch: nudge it below Streamlit's 60 px top bar, which cropped it. */
 .st-key-lang { margin-bottom: -0.8rem; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.3rem; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { margin-bottom: 0; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.55rem; }
+/* Streamlit gives Markdown blocks a -1rem bottom margin to cancel its default 1rem
+   gap. With the tighter gap that pulled the next widget up over the legends and
+   dividers, so it is cancelled here (and the paragraph margin with it). */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+[data-testid="stSidebar"] [data-testid="stMarkdown"] [data-testid="stMarkdownContainer"] p { margin-bottom: 0; line-height: 1.1; }
+[data-testid="stSidebar"] small { line-height: 1.3; }
+/* Sub-options under a layer (noise year / source / time): no forced label
+   height, and less air between the label and its options. */
+[data-testid="stSidebar"] [data-testid="stRadio"] [data-testid="stWidgetLabel"] { min-height: 0; margin-bottom: 0; }
+[data-testid="stSidebar"] [role="radiogroup"] label { min-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0.1rem; }
+[data-testid="stSidebar"] hr { margin: 0.15rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
